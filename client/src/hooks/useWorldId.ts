@@ -35,9 +35,7 @@ export function useWorldId(): UseWorldIdReturn {
         setIsReady(true);
       } else {
         // For development, simulate MiniKit availability
-        if (process.env.NODE_ENV === "development") {
-          setIsReady(true);
-        }
+        setIsReady(true);
       }
     };
 

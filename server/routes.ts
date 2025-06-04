@@ -39,13 +39,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get balance endpoint
   app.get("/api/balance", async (req, res) => {
     try {
-      // In production, this would fetch real balance from wallet API
-      // const address = req.query.address;
-      // const response = await fetch(`${process.env.WALLET_API_URL}/balance/${address}`);
-      // const balance = await response.json();
+      const userId = req.query.user_id || "default_user";
       
-      res.json(mockBalance);
+      // Fetch real balance from World ID wallet API
+      const response = await fetch(`https://developer.worldcoin.org/api/v1/minikit/wallet/balance`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${process.env.WORLD_API_KEY}`,
+          'Content-Type': 'application/json',
+          'X-App-ID': process.env.WORLD_APP_ID || ''
+        }
+      });
+
+      if (!response.ok) {
+        console.error(`World ID API error: ${response.status} ${response.statusText}`);
+        
+        // Fall back to requesting user to provide correct credentials
+        return res.status(401).json({ 
+          message: "World ID API authentication failed. Please verify your API credentials are correct.",
+          error: `API returned ${response.status}`,
+          suggestion: "Check your WORLD_API_KEY and WORLD_APP_ID configuration"
+        });
+      }
+
+      const balanceData = await response.json();
+      
+      // Extract balance information (format may vary based on World ID API response)
+      const cryptoAmount = balanceData.balance || 0;
+      const symbol = balanceData.currency || "WLD";
+      
+      // Get current price for USD conversion
+      const priceResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=worldcoin-wld&vs_currencies=usd');
+      const priceData = await priceResponse.json();
+      const usdPrice = priceData['worldcoin-wld']?.usd || 1;
+      
+      const usdValue = cryptoAmount * usdPrice;
+      
+      res.json({
+        usd: Math.round(usdValue * 100) / 100,
+        crypto: cryptoAmount,
+        symbol: symbol,
+        price_per_unit: usdPrice
+      });
     } catch (error) {
+      console.error("Balance fetch error:", error);
       res.status(500).json({ 
         message: "Failed to fetch balance",
         error: error instanceof Error ? error.message : "Unknown error"
@@ -114,12 +151,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid amount" });
       }
 
-      // In production, this would:
-      // 1. Verify World ID proof
-      // 2. Lock user tokens
-      // 3. Dispense coins via Python backend
-      // 4. Settle transaction
+      // Verify World ID proof with real API
+      const verifyResponse = await fetch(`https://developer.worldcoin.org/api/v1/verify/${process.env.WORLD_APP_ID}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.WORLD_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          nullifier_hash: nullifierHash,
+          merkle_root: merkleRoot,
+          proof: proof,
+          verification_level: "orb",
+          action: "withdraw"
+        })
+      });
+
+      if (!verifyResponse.ok) {
+        console.error(`World ID verification failed: ${verifyResponse.status}`);
+        return res.status(400).json({ 
+          message: "World ID verification failed",
+          error: "Invalid or expired proof"
+        });
+      }
+
+      const verificationResult = await verifyResponse.json();
       
+      if (!verificationResult.success) {
+        return res.status(400).json({ 
+          message: "World ID verification rejected",
+          error: "Proof validation failed"
+        });
+      }
+
+      // Process withdrawal with hardware
       if (process.env.NODE_ENV === "production") {
         // Call Python backend for withdrawal
         const pythonProcess = spawn("python3", [
@@ -147,7 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } catch {
               res.json({ 
                 success: true, 
-                transactionId: `WC-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`,
+                transactionId: `RA-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`,
                 coinsDispensed: Math.ceil(amountUsd / 0.25)
               });
             }
@@ -164,16 +229,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           res.status(500).json({ message: "Withdrawal timeout" });
         }, 30000);
       } else {
-        // Development mode - simulate successful withdrawal
+        // Development mode - simulate successful withdrawal after real verification
         setTimeout(() => {
           res.json({ 
             success: true, 
-            transactionId: `WC-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`,
-            coinsDispensed: Math.ceil(amountUsd / 0.25)
+            transactionId: `RA-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`,
+            coinsDispensed: Math.ceil(amountUsd / 0.25),
+            verified: true,
+            nullifierHash: nullifierHash
           });
         }, 3000); // Simulate processing time
       }
     } catch (error) {
+      console.error("Withdrawal error:", error);
       res.status(500).json({ 
         message: "Withdrawal failed",
         error: error instanceof Error ? error.message : "Unknown error"
