@@ -358,7 +358,7 @@ export default function KioskPage() {
           <div className="flex space-x-6">
             <Button
               onClick={handleStartWithdraw}
-              disabled={selectedAmount <= 0 || !isReady}
+              disabled={selectedAmount <= 0 || !worldId.isReady}
               className="flex-1 h-16 text-2xl font-bold bg-green-600 hover:bg-green-700 text-white shadow-lg"
             >
               <DollarSign className="w-6 h-6 mr-3" />
