@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+venv/
+env/
+.env
+.env.local
+.env.production
+
+# Build outputs
+dist/
+build/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+htmlcov/
+
+# Production
+/opt/worldcash/
+*.backup
+*.orig
+
+# Hardware logs
+tflex.log
+dispenser.log
+
+# Certificates
+*.key
+*.crt
+*.pem
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Local development
+docker-compose.override.yml

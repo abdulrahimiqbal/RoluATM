@@ -1,0 +1,78 @@
+# WorldCash Development Environment
+# Optional containerized development setup
+
+version: '3.8'
+
+services:
+  # Frontend development server
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    command: npm run dev
+
+  # Backend development server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /dev:/dev  # For hardware access
+    environment:
+      - DEV_MODE=true
+      - TFLEX_PORT=/dev/ttyACM0
+      - WORLD_API_URL=https://id.worldcoin.org/api/v1
+      - WALLET_API_URL=https://wallet.example.com
+      - FX_URL=https://api.kraken.com/0/public/Ticker?pair=WBTCUSD
+      - FIAT_DENOM=USD
+      - PORT=8000
+      - HOST=0.0.0.0
+    privileged: true  # For hardware access
+    devices:
+      - "/dev/ttyACM0:/dev/ttyACM0"  # T-Flex dispenser
+    command: python3 src/backend/app.py
+
+  # Mock T-Flex simulator for testing
+  mock-tflex:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8001:8001"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+    command: python3 tests/mock_tflex.py --host 0.0.0.0 --port 8001 --interactive
+
+  # Development database (if needed for future features)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=worldcash_dev
+      - POSTGRES_USER=worldcash
+      - POSTGRES_PASSWORD=dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    driver: bridge
