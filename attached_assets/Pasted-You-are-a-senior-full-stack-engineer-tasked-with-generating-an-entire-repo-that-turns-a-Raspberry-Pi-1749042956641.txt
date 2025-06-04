@@ -1,0 +1,129 @@
+You are a senior full‑stack engineer tasked with generating an entire repo that turns
+a Raspberry Pi 4 B and a Telequip T‑Flex coin dispenser into a crypto‑to‑cash kiosk.
+Create every file and directory, ready to run on both desktop (dev) and Raspberry Pi
+(production).
+
+────────────────────────────────────────────
+📁  Desired project layout
+────────────────────────────────────────────
+/
+ ├─ frontend/                 # React 18 + Vite + TypeScript
+ │   ├─ src/
+ │   │   ├─ App.tsx
+ │   │   ├─ hooks/useWorldId.ts
+ │   │   └─ components/Qr.tsx
+ │   ├─ vite.config.ts
+ │   └─ index.html
+ ├─ src/
+ │   ├─ backend/
+ │   │   ├─ app.py           # Flask entry‑point
+ │   │   ├─ driver_tflex.py  # Telequip serial driver
+ │   │   └─ settings.py
+ │   └─ install_pi.sh        # one‑shot deployment script
+ ├─ tests/
+ │   └─ mock_tflex.py
+ ├─ requirements.txt
+ ├─ package.json
+ ├─ README.md
+ ├─ .gitignore
+ └─ docker-compose.dev.yml   # optional dev container
+
+────────────────────────────────────────────
+🌐  Front‑end (frontend/)
+────────────────────────────────────────────
+• React 18  +  Vite  +  TypeScript
+• `@worldcoin/minikit‑react` for World ID verify flow
+• `qrcode.react` (pure React QR)
+• Tailwind for tiny styling (optional)
+
+Behaviour:
+1. Fetch `/api/balance` → show token balance in fiat (USD).
+2. “Withdraw $X” button opens MiniKit `verify()` with:
+     actionId = `atm-demo-${Date.now()}`
+     signal    = 'withdraw'
+     devMode   = true
+3. On proof callback POST to `/api/withdraw` with JSON:
+     { proof, nullifierHash, merkleRoot, amountUsd }
+4. Display spinner; on 200 OK show “Take your cash!” banner.
+
+────────────────────────────────────────────
+🐍  Back‑end (src/backend/)
+────────────────────────────────────────────
+• Python 3.11
+• Flask + CORS
+• `pyserial` for USB CDC device `/dev/ttyACM0`
+• `requests` for:
+     * World ID verifier API      (env WORLD_API_URL)
+     * Wallet lock/settle API     (env WALLET_API_URL)
+     * Kraken price ticker        (env FX_URL, default Kraken)
+
+Key routes:
+GET  /api/balance?address=:addr
+POST /api/withdraw   — body {proof, nullifierHash, merkleRoot, amountUsd}
+
+Serial driver:
+class TFlex(port:str='/dev/ttyACM0'):
+    def dispense(self, coins:int) -> None
+    def status(self) -> dict  # low_coin, lid_open, fault
+
+On withdraw:
+1. Verify World ID proof (HTTP). 400 if invalid.
+2. Lock user tokens via wallet.
+3. Convert USD → quarters (25¢) ; up‑round to nearest coin.
+4. tflex.dispense(n); if RuntimeError:
+       wallet.unlock(); return 500.
+5. wallet.settle(); return 200.
+
+────────────────────────────────────────────
+⚙️  install_pi.sh
+────────────────────────────────────────────
+• Enables `sudo apt install python3-venv nginx`
+• Symlinks nginx conf serving frontend/dist behind TLS (self‑signed).
+• Adds systemd units:
+    worldcash.service  (gunicorn backend)
+    kiosk-chromium.service
+• Adds `gpu_mem=128` and `dtoverlay=vc4-kms-v3d` to /boot/firmware/config.txt
+• Adds pi to dialout group.
+
+────────────────────────────────────────────
+🧪  tests/mock_tflex.py
+────────────────────────────────────────────
+Minimal asyncio TCP or serial‑url simulator that echoes coin bytes,
+emits low‑coin after N coins, and simulates jam on command.
+
+────────────────────────────────────────────
+🌍  Environment variables (.env example)
+────────────────────────────────────────────
+TFLEX_PORT=/dev/ttyACM0
+WORLD_API_URL=https://id.worldcoin.org/api/v1/verify
+WALLET_API_URL=https://wallet.example.com
+FX_URL=https://api.kraken.com/0/public/Ticker?pair=WBTCUSD
+FIAT_DENOM=USD
+DEV_MODE=true
+
+────────────────────────────────────────────
+README.md contents
+────────────────────────────────────────────
+• Overview diagram (mermaid sequence)
+• Bill‑of‑materials list (Pi kit, USB‑B cable, T‑Flex, key 340‑314S)
+• Dev quick‑start
+• Pi deploy instructions
+• Troubleshooting table
+• Roadmap
+
+────────────────────────────────────────────
+Constraints & niceties
+────────────────────────────────────────────
+• No database—store nothing persistent on Pi.
+• Use `python-dotenv` to load env vars locally.
+• CORS allow origin `*` for dev; env toggle for prod.
+• `npm run build` puts static files in `frontend/dist`; backend serves them.
+• Provide complete type annotations in driver_tflex.py.
+• Makefile with targets: dev, build, lint‑py, lint‑js.
+
+Generate every file with correct paths, full content, including
+package.json, requirements.txt, vite config, Tailwind config,
+systemd unit files, and install_pi.sh.
+
+Return **only** the file list followed by the file contents.
+No explanatory prose, just the repo scaffold.
