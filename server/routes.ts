@@ -39,48 +39,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get balance endpoint
   app.get("/api/balance", async (req, res) => {
     try {
-      const userId = req.query.user_id || "default_user";
+      // World ID MiniKit wallet integration requires proper API endpoints
+      // The current endpoints may not be correct - need user to verify the proper World ID wallet API
       
-      // Fetch real balance from World ID wallet API
-      const response = await fetch(`https://developer.worldcoin.org/api/v1/minikit/wallet/balance`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.WORLD_API_KEY}`,
-          'Content-Type': 'application/json',
-          'X-App-ID': process.env.WORLD_APP_ID || ''
-        }
+      console.error("World ID wallet API integration needs proper endpoint configuration");
+      
+      return res.status(503).json({ 
+        message: "World ID wallet API integration requires proper configuration",
+        error: "API endpoint verification needed",
+        suggestion: "Please provide the correct World ID wallet API endpoint and authentication method for your app configuration"
       });
-
-      if (!response.ok) {
-        console.error(`World ID API error: ${response.status} ${response.statusText}`);
-        
-        // Fall back to requesting user to provide correct credentials
-        return res.status(401).json({ 
-          message: "World ID API authentication failed. Please verify your API credentials are correct.",
-          error: `API returned ${response.status}`,
-          suggestion: "Check your WORLD_API_KEY and WORLD_APP_ID configuration"
-        });
-      }
-
-      const balanceData = await response.json();
       
-      // Extract balance information (format may vary based on World ID API response)
-      const cryptoAmount = balanceData.balance || 0;
-      const symbol = balanceData.currency || "WLD";
-      
-      // Get current price for USD conversion
-      const priceResponse = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=worldcoin-wld&vs_currencies=usd');
-      const priceData = await priceResponse.json();
-      const usdPrice = priceData['worldcoin-wld']?.usd || 1;
-      
-      const usdValue = cryptoAmount * usdPrice;
-      
-      res.json({
-        usd: Math.round(usdValue * 100) / 100,
-        crypto: cryptoAmount,
-        symbol: symbol,
-        price_per_unit: usdPrice
-      });
     } catch (error) {
       console.error("Balance fetch error:", error);
       res.status(500).json({ 
