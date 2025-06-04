@@ -66,9 +66,9 @@ export function useWorldId(): UseWorldIdReturn {
         setTimeout(() => {
           if (shouldSucceed) {
             resolve({
-              proof: `mock_proof_${Date.now()}`,
-              merkle_root: `mock_merkle_root_${Date.now()}`,
-              nullifier_hash: `mock_nullifier_${Date.now()}`,
+              proof: `mock_proof_${actionId}`,
+              merkle_root: `mock_merkle_root_${actionId}`,
+              nullifier_hash: `mock_nullifier_${actionId}`,
               verification_level: "orb",
             });
           } else {

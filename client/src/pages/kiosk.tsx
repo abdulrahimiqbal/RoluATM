@@ -51,6 +51,7 @@ export default function KioskPage() {
   const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentActionId, setCurrentActionId] = useState<string>("");
   const { toast } = useToast();
 
   // Update time every second
@@ -132,15 +133,17 @@ export default function KioskPage() {
       return;
     }
 
+    // Generate a stable action ID for this withdrawal session
+    const actionId = `atm-demo-${Date.now()}`;
+    setCurrentActionId(actionId);
     setShowWorldIdModal(true);
   };
 
   const handleWorldIdVerify = async () => {
     try {
-      const actionId = `atm-demo-${Date.now()}`;
       const signal = "withdraw";
       
-      const proof = await verify(actionId, signal);
+      const proof = await verify(currentActionId, signal);
       
       setShowWorldIdModal(false);
       setShowProcessingModal(true);
@@ -166,6 +169,7 @@ export default function KioskPage() {
     setShowSuccessModal(false);
     setSelectedAmount(0);
     setCustomAmount("");
+    setCurrentActionId("");
   };
 
   const getStatusColor = (status: string) => {
@@ -357,6 +361,7 @@ export default function KioskPage() {
               onClick={() => {
                 setSelectedAmount(0);
                 setCustomAmount("");
+                setCurrentActionId("");
               }}
               variant="secondary"
               className="h-16 px-8 text-xl font-bold shadow-lg"
