@@ -7,8 +7,15 @@ interface WorldIDProof {
   verification_level: string;
 }
 
+interface WalletBalance {
+  usd: number;
+  crypto: number;
+  symbol: string;
+}
+
 interface UseWorldIdReturn {
   verify: (actionId: string, signal: string) => Promise<WorldIDProof>;
+  getWalletBalance: () => Promise<WalletBalance>;
   isReady: boolean;
 }
 
@@ -20,6 +27,8 @@ declare global {
         signal?: string;
         verification_level?: string;
       }) => Promise<WorldIDProof>;
+      walletAuth: () => Promise<{ address: string }>;
+      tokenBalance: (tokenAddress: string) => Promise<{ balance: string; symbol: string }>;
       isInstalled: () => boolean;
     };
   }
@@ -77,5 +86,32 @@ export function useWorldId(): UseWorldIdReturn {
     }
   };
 
-  return { verify, isReady };
+  const getWalletBalance = async (): Promise<WalletBalance> => {
+    if (window.MiniKit?.isInstalled()) {
+      try {
+        // Authenticate wallet connection
+        const walletAuth = await window.MiniKit.walletAuth();
+        
+        // Get WLD token balance (World ID's native token)
+        const wldBalance = await window.MiniKit.tokenBalance("0x163f8c2467924be0ae7b5347228cabf260318753");
+        
+        // Convert balance to numbers and calculate USD value
+        const cryptoAmount = parseFloat(wldBalance.balance) / 1e18; // Convert from wei
+        const usdAmount = cryptoAmount * 2.1; // Approximate WLD price
+        
+        return {
+          usd: parseFloat(usdAmount.toFixed(2)),
+          crypto: parseFloat(cryptoAmount.toFixed(4)),
+          symbol: wldBalance.symbol || "WLD"
+        };
+      } catch (error) {
+        console.error("MiniKit wallet error:", error);
+        throw new Error("Failed to fetch wallet balance from MiniKit");
+      }
+    } else {
+      throw new Error("World ID MiniKit not available - please install World App");
+    }
+  };
+
+  return { verify, getWalletBalance, isReady };
 }

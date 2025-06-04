@@ -60,10 +60,20 @@ export default function KioskPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch balance data
+  // World ID integration
+  const worldId = useWorldId();
+
+  // Fetch balance data from World ID MiniKit
   const { data: balance, isLoading: balanceLoading, refetch: refetchBalance } = useQuery<BalanceData>({
-    queryKey: ["/api/balance"],
+    queryKey: ["wallet-balance"],
+    queryFn: async () => {
+      if (worldId.isReady) {
+        return await worldId.getWalletBalance();
+      }
+      throw new Error("World ID not ready");
+    },
     refetchInterval: 30000, // Refresh every 30 seconds
+    enabled: worldId.isReady,
   });
 
   // Fetch hardware status
@@ -71,9 +81,6 @@ export default function KioskPage() {
     queryKey: ["/api/status"],
     refetchInterval: 5000, // Refresh every 5 seconds
   });
-
-  // World ID integration
-  const { verify, isReady } = useWorldId();
 
   // Withdraw mutation
   const withdrawMutation = useMutation({
@@ -143,7 +150,7 @@ export default function KioskPage() {
     try {
       const signal = "withdraw";
       
-      const proof = await verify(currentActionId, signal);
+      const proof = await worldId.verify(currentActionId, signal);
       
       setShowWorldIdModal(false);
       setShowProcessingModal(true);
