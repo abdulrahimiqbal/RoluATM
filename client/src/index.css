@@ -13,9 +13,9 @@
   --card-foreground: 20 14.3% 4.1%;
   --border: 20 5.9% 90%;
   --input: 20 5.9% 90%;
-  --primary: 214 100% 42%; /* #1565C0 */
-  --primary-foreground: 211 100% 99%;
-  --primary-dark: 214 100% 32%; /* #0D47A1 */
+  --primary: 206 100% 62%; /* #38b6ff */
+  --primary-foreground: 0 0% 100%;
+  --primary-dark: 206 100% 52%; /* #1a9fff */
   --secondary: 122 100% 39%; /* #00C853 */
   --secondary-foreground: 60 9.1% 97.8%;
   --accent: 60 4.8% 95.9%;
@@ -39,8 +39,8 @@
   --card-foreground: 0 0% 98%;
   --border: 240 3.7% 15.9%;
   --input: 240 3.7% 15.9%;
-  --primary: 214 100% 42%;
-  --primary-foreground: 211 100% 99%;
+  --primary: 206 100% 62%;
+  --primary-foreground: 0 0% 100%;
   --secondary: 122 100% 39%;
   --secondary-foreground: 0 0% 98%;
   --accent: 240 3.7% 15.9%;

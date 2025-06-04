@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WorldCash Crypto-to-Cash Kiosk Backend
+RoluATM Crypto-to-Cash Kiosk Backend
 Flask application for hardware control and API integration
 """
 

@@ -215,7 +215,7 @@ export default function KioskPage() {
             <Coins className="text-white text-xl" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-neutral-dark">WorldCash</h1>
+            <h1 className="text-2xl font-bold text-neutral-dark">RoluATM</h1>
             <p className="text-sm text-gray-600">Crypto-to-Cash ATM</p>
           </div>
         </div>
@@ -263,7 +263,7 @@ export default function KioskPage() {
         <div className="w-2/3 p-8 flex flex-col justify-center">
           <div className="bg-white rounded-3xl shadow-2xl p-12 mb-8">
             <div className="text-center mb-8">
-              <h2 className="text-4xl font-bold text-neutral-dark mb-4">Welcome to WorldCash</h2>
+              <h2 className="text-4xl font-bold text-neutral-dark mb-4">Welcome to RoluATM</h2>
               <p className="text-xl text-gray-600">Convert your crypto to cash instantly</p>
             </div>
             

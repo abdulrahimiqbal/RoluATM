@@ -1,5 +1,5 @@
 """
-WorldCash Backend Settings
+RoluATM Backend Settings
 Configuration management for environment variables and defaults
 """
 
