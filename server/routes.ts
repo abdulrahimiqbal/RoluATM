@@ -39,15 +39,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get balance endpoint
   app.get("/api/balance", async (req, res) => {
     try {
-      // World ID MiniKit wallet integration requires proper API endpoints
-      // The current endpoints may not be correct - need user to verify the proper World ID wallet API
+      // World ID MiniKit integration for wallet balance
+      // This endpoint expects the frontend to provide wallet data via MiniKit
+      // Since MiniKit runs client-side, we'll need the verified wallet data from the client
       
-      console.error("World ID wallet API integration needs proper endpoint configuration");
-      
-      return res.status(503).json({ 
-        message: "World ID wallet API integration requires proper configuration",
-        error: "API endpoint verification needed",
-        suggestion: "Please provide the correct World ID wallet API endpoint and authentication method for your app configuration"
+      res.status(400).json({ 
+        message: "Balance data must be provided by World ID MiniKit client",
+        error: "CLIENT_INTEGRATION_REQUIRED",
+        instruction: "Use World ID MiniKit to fetch wallet balance on the client side"
       });
       
     } catch (error) {
@@ -120,11 +119,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid amount" });
       }
 
-      // Verify World ID proof with real API
-      const verifyResponse = await fetch(`https://developer.worldcoin.org/api/v1/verify/${process.env.WORLD_APP_ID}`, {
+      // Verify World ID proof with correct API endpoint
+      const verifyResponse = await fetch(`https://id.worldcoin.org/api/v1/verify/${process.env.WORLD_APP_ID}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.WORLD_API_KEY}`,
+          'Authorization': `Bearer ${process.env.WORLD_CLIENT_SECRET}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
