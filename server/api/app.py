@@ -207,13 +207,25 @@ def dispense_quarters_mock(num_quarters, transaction_id):
     time.sleep(2)  # Simulate dispense time
     return True
 
-def handler(request, context=None):
+def handler(event, context=None):
     """Main Vercel handler"""
-    method = os.getenv('REQUEST_METHOD', 'GET')
-    path = os.getenv('REQUEST_PATH_INFO', os.getenv('VERCEL_URL_PATH', '/'))
-    query_string = os.getenv('QUERY_STRING', '')
+    # Handle both API Gateway and direct invocation formats
+    if isinstance(event, dict) and 'httpMethod' in event:
+        # API Gateway format
+        method = event['httpMethod']
+        path = event.get('path', '/')
+        query_string = event.get('queryStringParameters') or {}
+        body = event.get('body', '')
+        headers = event.get('headers', {})
+    else:
+        # Direct invocation or other format
+        method = os.getenv('REQUEST_METHOD', 'GET')
+        path = os.getenv('REQUEST_PATH_INFO', os.getenv('VERCEL_URL_PATH', '/'))
+        query_string = os.getenv('QUERY_STRING', '')
+        body = ''
+        headers = {}
     
-    print(f"📝 {method} {path} - Query: {query_string}")
+    print(f"📝 {method} {path}")
     
     # Handle CORS preflight
     if method == 'OPTIONS':
@@ -237,24 +249,18 @@ def handler(request, context=None):
     if path == '/api/transaction/create' and method == 'POST':
         try:
             # Parse request body
-            content_length = int(os.getenv('CONTENT_LENGTH', 0))
-            if content_length > 0:
-                import sys
-                body = sys.stdin.read(content_length)
-                data = json.loads(body)
+            if body:
+                data = json.loads(body) if isinstance(body, str) else body
             else:
                 data = {'fiat_amount': 5.0}  # Default
             
-            fiat_amount = float(data.get('fiat_amount', 5.0))
+            fiat_amount = float(data.get('fiat_amount', data.get('amount', 5.0)))
             transaction_id = str(uuid.uuid4())
             quarters = int(fiat_amount / 0.25)
             expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
             
-            # Create mini app URL with backend parameter for dev mode
-            if DEV_MODE:
-                mini_app_url = f"{MINI_APP_URL}?backend=vercel&transaction_id={transaction_id}"
-            else:
-                mini_app_url = f"{MINI_APP_URL}?transaction_id={transaction_id}"
+            # Create mini app URL - always use vercel backend for deployed version
+            mini_app_url = f"{MINI_APP_URL}?transaction_id={transaction_id}"
             
             # Create transaction
             transaction = db.create_transaction(transaction_id, fiat_amount, quarters, mini_app_url, expires_at)
@@ -285,11 +291,8 @@ def handler(request, context=None):
     if path == '/api/transaction/pay' and method == 'POST':
         try:
             # Parse request body
-            content_length = int(os.getenv('CONTENT_LENGTH', 0))
-            if content_length > 0:
-                import sys
-                body = sys.stdin.read(content_length)
-                data = json.loads(body)
+            if body:
+                data = json.loads(body) if isinstance(body, str) else body
             else:
                 return create_response(400, {'error': 'No request body'})
             
@@ -424,4 +427,4 @@ if __name__ == '__main__':
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("\n�� Server stopped") 
+            print("\n Server stopped") 
