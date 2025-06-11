@@ -51,8 +51,7 @@ export default function TransactionPage() {
     queryKey: ["/api/transaction", transactionId],
     queryFn: async () => {
       if (!transactionId) throw new Error("No transaction ID provided");
-      const response = await apiRequest("GET", `/api/transaction/${transactionId}`);
-      return response.json();
+      return await apiRequest(`/api/transaction/${transactionId}`);
     },
     enabled: !!transactionId,
     refetchInterval: 2000, // Poll for status updates
@@ -61,8 +60,10 @@ export default function TransactionPage() {
   // Payment mutation
   const paymentMutation = useMutation({
     mutationFn: async (data: PaymentRequest) => {
-      const response = await apiRequest("POST", "/api/transaction/pay", data);
-      return response.json();
+      return await apiRequest("/api/transaction/pay", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       setPaymentStatus("success");
