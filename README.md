@@ -132,3 +132,4 @@ For hardware setup, deployment issues, or integration questions, refer to the do
 
 **Built for real-world crypto-to-cash conversion with enterprise-grade security and hardware integration.**
 # Auto-deployment test - Wed Jun 11 10:52:26 PDT 2025
+# Trigger rebuild - Wed Jun 11 11:22:12 PDT 2025
