@@ -1,21 +1,16 @@
 {
-  "functions": {
-    "api/*.py": {
-      "runtime": "@vercel/python"
-    }
-  },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/health",
-      "dest": "/api/index.py"
+      "source": "/api/(.*)",
+      "destination": "/api/app.py"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
+      "source": "/health",
+      "destination": "/api/app.py"
     },
     {
-      "src": "/(.*)",
-      "dest": "/api/index.py"
+      "source": "/(.*)",
+      "destination": "/api/app.py"
     }
   ]
 } 

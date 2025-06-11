@@ -1,6 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// Configure API base URL - use deployed backend for production
+// Configure API base URL - support for local and deployed backend
 const getApiBaseUrl = () => {
   // Check environment variable first (for deployed version)
   const envApiUrl = (import.meta as any).env?.VITE_API_BASE_URL;
@@ -8,8 +8,13 @@ const getApiBaseUrl = () => {
     return envApiUrl;
   }
   
-  // Use the deployed backend URL for consistent experience
-  return 'https://server-k36bxwifq-abdulrahimiqbals-projects.vercel.app';
+  // For local development, default to local backend
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  
+  // For deployed version without environment variable, use relative URLs
+  return '';
 };
 
 const API_BASE_URL = getApiBaseUrl();

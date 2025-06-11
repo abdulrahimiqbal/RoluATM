@@ -1,7 +1,2 @@
-# No external dependencies needed for basic functionality
-# All required modules are part of Python standard library:
-# - json
-# - time  
-# - uuid
-# - os
-# - datetime
+requests==2.31.0
+psycopg2-binary==2.9.9

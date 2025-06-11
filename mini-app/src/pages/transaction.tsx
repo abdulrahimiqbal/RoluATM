@@ -51,7 +51,8 @@ export default function TransactionPage() {
     queryKey: ["/api/transaction", transactionId],
     queryFn: async () => {
       if (!transactionId) throw new Error("No transaction ID provided");
-      return await apiRequest(`/api/transaction/${transactionId}`);
+      const response = await apiRequest("GET", `/api/transaction/${transactionId}`);
+      return response.json();
     },
     enabled: !!transactionId,
     refetchInterval: 2000, // Poll for status updates
@@ -60,18 +61,14 @@ export default function TransactionPage() {
   // Payment mutation
   const paymentMutation = useMutation({
     mutationFn: async (data: PaymentRequest) => {
-      return await apiRequest("/api/transaction/pay", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      const response = await apiRequest("POST", "/api/transaction/pay", data);
+      return response.json();
     },
     onSuccess: () => {
       setPaymentStatus("success");
       toast({
         title: "Payment Successful!",
-        description: worldId.isDevelopment 
-          ? "Mock payment completed! (Development mode)" 
-          : "Your quarters are being dispensed at the kiosk.",
+        description: "Your quarters are being dispensed at the kiosk.",
       });
     },
     onError: (error) => {
@@ -88,9 +85,7 @@ export default function TransactionPage() {
     if (!transaction || !worldId.isReady) {
       toast({
         title: "Not Ready",
-        description: worldId.isDevelopment 
-          ? "Development mode initializing..." 
-          : "Please wait for World ID to initialize.",
+        description: "Please wait for World ID to initialize.",
         variant: "destructive",
       });
       return;
@@ -100,7 +95,7 @@ export default function TransactionPage() {
     setPaymentStatus("processing");
 
     try {
-      // Verify World ID (or mock in development)
+      // Verify World ID
       const proof = await worldId.verify(
         `rolu-atm-${transaction.id}`,
         "payment"
@@ -118,9 +113,7 @@ export default function TransactionPage() {
       setPaymentStatus("error");
       toast({
         title: "Verification Failed",
-        description: error.message || (worldId.isDevelopment 
-          ? "Mock verification failed" 
-          : "World ID verification was cancelled or failed"),
+        description: error.message || "World ID verification was cancelled or failed",
         variant: "destructive",
       });
     } finally {
