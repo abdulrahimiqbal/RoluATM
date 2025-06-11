@@ -1,71 +1,75 @@
 #!/bin/bash
 
-echo "🔍 RoluATM System Status Check"
-echo "=============================="
+# RoluATM System Status Check
+echo "🔍 RoluATM System Status"
+echo "========================"
 
-# Colors for output
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Function to check service
+# Function to check service status
 check_service() {
-    local name=$1
-    local url=$2
+    local service_name=$1
+    local pid_file=$2
     local port=$3
+    local url=$4
     
-    echo -n "  $name: "
-    
-    # Check if port is listening
-    if ! lsof -Pi :$port -sTCP:LISTEN -t >/dev/null; then
-        echo -e "${RED}❌ Not running (port $port not listening)${NC}"
-        return 1
-    fi
-    
-    # Check if service responds
-    if curl -s --max-time 3 "$url" > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ Running${NC}"
-        return 0
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            # Check if service is responding
+            if curl -s "$url" > /dev/null 2>&1; then
+                echo "✅ $service_name: Running (PID: $pid, Port: $port)"
+            else
+                echo "⚠️  $service_name: Process running but not responding (PID: $pid)"
+            fi
+        else
+            echo "❌ $service_name: Process not running (stale PID file)"
+        fi
     else
-        echo -e "${RED}❌ Port open but not responding${NC}"
-        return 1
+        echo "❌ $service_name: Not running (no PID file)"
     fi
 }
 
-echo -e "${BLUE}Checking services...${NC}"
-
-# Check backend
-check_service "Backend API" "http://localhost:8000/health" 8000
-BACKEND_OK=$?
-
-# Check kiosk app
-check_service "Kiosk App" "http://localhost:3000" 3000
-KIOSK_OK=$?
-
-# Check mini app
-check_service "Mini App" "http://localhost:3001" 3001
-MINI_OK=$?
+# Check all services
+check_service "Backend" "backend.pid" "8000" "http://localhost:8000/health"
+check_service "Kiosk App" "kiosk.pid" "3000" "http://localhost:3000"
+check_service "Mini App" "mini.pid" "3001" "http://localhost:3001"
 
 echo ""
+echo "🌐 Service URLs:"
+echo "Backend API:    http://localhost:8000"
+echo "Kiosk App:      http://localhost:3000"
+echo "Mini App:       http://localhost:3001"
 
-# Overall status
-if [ $BACKEND_OK -eq 0 ] && [ $KIOSK_OK -eq 0 ] && [ $MINI_OK -eq 0 ]; then
-    echo -e "${GREEN}🎉 All services are running!${NC}"
-    echo ""
-    echo -e "${BLUE}Access URLs:${NC}"
-    echo "  Backend:   http://localhost:8000"
-    echo "  Kiosk:     http://localhost:3000"
-    echo "  Mini App:  http://localhost:3001"
-    echo ""
-    echo -e "${BLUE}Test transaction creation:${NC}"
-    echo "  curl -X POST http://localhost:8000/api/transaction/create -H \"Content-Type: application/json\" -d '{\"amount\": 5}'"
-else
-    echo -e "${RED}❌ Some services are not running${NC}"
-    echo ""
-    echo -e "${BLUE}To start the system:${NC}"
-    echo "  ./start-system.sh"
-    echo ""
-    echo -e "${BLUE}To stop the system:${NC}"
-    echo "  ./stop-system.sh"
-fi 
+echo ""
+echo "📊 Port Usage:"
+for port in 8000 3000 3001; do
+    pid=$(lsof -ti:$port 2>/dev/null)
+    if [ ! -z "$pid" ]; then
+        process=$(ps -p $pid -o comm= 2>/dev/null)
+        echo "Port $port: Used by PID $pid ($process)"
+    else
+        echo "Port $port: Available"
+    fi
+done
+
+echo ""
+echo "📝 Recent Log Activity:"
+if [ -f "backend.log" ]; then
+    echo "Backend (last 2 lines):"
+    tail -2 backend.log | sed 's/^/  /'
+fi
+
+if [ -f "kiosk.log" ]; then
+    echo "Kiosk (last 2 lines):"
+    tail -2 kiosk.log | sed 's/^/  /'
+fi
+
+if [ -f "mini.log" ]; then
+    echo "Mini (last 2 lines):"
+    tail -2 mini.log | sed 's/^/  /'
+fi
+
+echo ""
+echo "🔧 Management Commands:"
+echo "./start-system.sh  - Start all services"
+echo "./stop-system.sh   - Stop all services"
+echo "./check-status.sh  - Show this status" 

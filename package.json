@@ -14,7 +14,7 @@
   "keywords": [
     "crypto",
     "atm",
-    "kiosk", 
+    "kiosk",
     "world-id",
     "raspberry-pi",
     "t-flex",
@@ -31,5 +31,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/yourusername/RoluATM.git"
+  },
+  "dependencies": {
+    "@radix-ui/react-tooltip": "^1.2.7",
+    "@tailwindcss/typography": "^0.5.16"
   }
 }

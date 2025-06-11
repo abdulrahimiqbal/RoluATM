@@ -1,26 +1,61 @@
 #!/bin/bash
 
-echo "🛑 Stopping RoluATM System"
-echo "=========================="
+# RoluATM System Stop Script
+echo "🛑 Stopping RoluATM System..."
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+# Function to stop service by PID file
+stop_service() {
+    local service_name=$1
+    local pid_file=$2
+    
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "🔄 Stopping $service_name (PID: $pid)..."
+            kill "$pid" 2>/dev/null
+            sleep 2
+            
+            # Force kill if still running
+            if kill -0 "$pid" 2>/dev/null; then
+                echo "⚡ Force stopping $service_name..."
+                kill -9 "$pid" 2>/dev/null
+            fi
+            echo "✅ $service_name stopped"
+        else
+            echo "⚠️  $service_name was not running"
+        fi
+        rm -f "$pid_file"
+    else
+        echo "⚠️  No PID file found for $service_name"
+    fi
+}
 
-echo -e "${YELLOW}Killing all RoluATM processes...${NC}"
+# Stop services
+stop_service "Backend" "backend.pid"
+stop_service "Kiosk App" "kiosk.pid"
+stop_service "Mini App" "mini.pid"
 
-# Kill all related processes
-pkill -f "python.*pi_backend" 2>/dev/null
-pkill -f "vite.*kiosk" 2>/dev/null  
-pkill -f "vite.*mini" 2>/dev/null
+# Kill any remaining processes
+echo "🧹 Cleaning up remaining processes..."
+pkill -f "python.*backend" 2>/dev/null
 pkill -f "npm.*dev" 2>/dev/null
+pkill -f "vite" 2>/dev/null
 
-# Force kill processes on specific ports
-echo -e "${YELLOW}Freeing up ports...${NC}"
-lsof -ti:8000,3000,3001,3002,3003 | xargs kill -9 2>/dev/null || true
+# Kill processes on specific ports
+for port in 8000 3000 3001; do
+    pid=$(lsof -ti:$port 2>/dev/null)
+    if [ ! -z "$pid" ]; then
+        echo "🔧 Killing process $pid on port $port"
+        kill -9 $pid 2>/dev/null
+    fi
+done
 
-sleep 2
+# Clean up log files (optional)
+if [ "$1" = "--clean-logs" ]; then
+    echo "🗑️  Cleaning log files..."
+    rm -f backend.log kiosk.log mini.log
+fi
 
-echo -e "${GREEN}✅ RoluATM system stopped${NC}"
-echo "All ports are now available for restart" 
+echo ""
+echo "✅ RoluATM System Stopped Successfully!"
+echo "All services have been terminated and ports are free." 
