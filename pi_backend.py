@@ -247,6 +247,15 @@ class RoluATMHandler(BaseHTTPRequestHandler):
                     'database': 'connected'
                 })
             
+            elif path == '/api/status':
+                # Return hardware status for kiosk UI
+                tflex_status = tflex.get_status()
+                self.send_json_response({
+                    'coinDispenser': 'ready' if tflex_status.get('status') != 'error' else 'fault',
+                    'network': 'connected',
+                    'security': 'active'
+                })
+            
             elif path.startswith('/api/transaction/'):
                 transaction_id = path.split('/')[-1]
                 transaction = db.get_transaction(transaction_id)
