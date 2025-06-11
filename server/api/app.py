@@ -18,7 +18,7 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 DEV_MODE = os.getenv('DEV_MODE', 'false').lower() == 'true'
 MINI_APP_URL = os.getenv('MINI_APP_URL', 'https://mini-app-azure.vercel.app')
 
-# In-memory storage for transactions
+# In-memory storage for transactions (will be replaced with database)
 transactions = {}
 
 class handler(BaseHTTPRequestHandler):
@@ -36,6 +36,7 @@ class handler(BaseHTTPRequestHandler):
             # Parse URL
             parsed_url = urlparse(self.path)
             path = parsed_url.path
+            query_params = parse_qs(parsed_url.query)
             
             print(f"📝 {method} {path}")
             
@@ -44,153 +45,102 @@ class handler(BaseHTTPRequestHandler):
                 self.send_cors_response(200, {
                     'status': 'healthy',
                     'timestamp': datetime.now(timezone.utc).isoformat(),
-                    'hardware': {
-                        'coinDispenser': 'ready',
-                        'network': 'connected', 
-                        'security': 'active',
-                        'database': 'in-memory'
-                    }
+                    'environment': 'vercel',
+                    'database_configured': bool(DATABASE_URL),
+                    'world_client_configured': bool(WORLD_CLIENT_SECRET)
                 })
                 return
             
             # Create transaction
             if path == '/api/transaction/create' and method == 'POST':
-                try:
-                    # Read request body
-                    content_length = int(self.headers.get('Content-Length', 0))
-                    if content_length > 0:
-                        body = self.rfile.read(content_length).decode('utf-8')
-                        data = json.loads(body)
-                    else:
-                        data = {'amount': 5.0}
-                    
-                    fiat_amount = float(data.get('fiat_amount', data.get('amount', 5.0)))
-                    transaction_id = str(uuid.uuid4())
-                    quarters = int(fiat_amount / 0.25)
-                    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-                    
-                    # Create mini app URL
-                    mini_app_url = f"https://mini-app-azure.vercel.app?transaction_id={transaction_id}"
-                    
-                    # Create transaction
-                    transaction = {
-                        'id': transaction_id,
-                        'fiat_amount': fiat_amount,
-                        'quarters': quarters,
-                        'status': 'pending',
-                        'mini_app_url': mini_app_url,
-                        'progress': 0,
-                        'created_at': datetime.now(timezone.utc).isoformat(),
-                        'expires_at': expires_at.isoformat()
-                    }
-                    
-                    transactions[transaction_id] = transaction
-                    
-                    print(f"✅ Created transaction {transaction_id} for ${fiat_amount} ({quarters} quarters)")
-                    
-                    self.send_cors_response(200, transaction)
-                    return
-                    
-                except Exception as e:
-                    print(f"❌ Transaction creation error: {e}")
-                    self.send_cors_response(500, {'error': str(e)})
-                    return
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    body = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(body)
+                else:
+                    data = {}
+                
+                amount = data.get('amount', 5.0)
+                transaction_id = str(uuid.uuid4())
+                
+                # Calculate quarters (25 cents each)
+                quarters = int(amount * 4)  # $1 = 4 quarters
+                
+                transaction = {
+                    'id': transaction_id,
+                    'amount': amount,
+                    'quarters': quarters,
+                    'status': 'pending',
+                    'created_at': datetime.now(timezone.utc).isoformat(),
+                    'mini_app_url': f"{MINI_APP_URL}?transaction_id={transaction_id}"
+                }
+                
+                transactions[transaction_id] = transaction
+                
+                self.send_cors_response(200, {
+                    'transaction_id': transaction_id,
+                    'amount': amount,
+                    'quarters': quarters,
+                    'mini_app_url': transaction['mini_app_url'],
+                    'status': 'pending'
+                })
+                return
             
             # Get transaction
             if path.startswith('/api/transaction/') and method == 'GET':
-                try:
-                    transaction_id = path.split('/')[-1]
-                    
-                    transaction = transactions.get(transaction_id)
-                    if transaction:
-                        self.send_cors_response(200, transaction)
-                    else:
-                        self.send_cors_response(404, {'error': 'Transaction not found'})
-                    return
-                except Exception as e:
-                    print(f"❌ Transaction lookup error: {e}")
-                    self.send_cors_response(500, {'error': str(e)})
-                    return
+                transaction_id = path.split('/')[-1]
+                
+                if transaction_id in transactions:
+                    self.send_cors_response(200, transactions[transaction_id])
+                else:
+                    self.send_cors_response(404, {'error': 'Transaction not found'})
+                return
             
-            # Process payment
-            if path == '/api/transaction/pay' and method == 'POST':
-                try:
-                    # Read request body
-                    content_length = int(self.headers.get('Content-Length', 0))
-                    if content_length > 0:
-                        body = self.rfile.read(content_length).decode('utf-8')
-                        data = json.loads(body)
-                    else:
-                        self.send_cors_response(400, {'error': 'No request body'})
-                        return
+            # Update transaction payment
+            if path.startswith('/api/transaction/') and path.endswith('/payment') and method == 'POST':
+                transaction_id = path.split('/')[-2]
+                
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    body = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(body)
+                else:
+                    data = {}
+                
+                if transaction_id in transactions:
+                    # Update transaction status
+                    transactions[transaction_id]['status'] = 'paid'
+                    transactions[transaction_id]['payment_verified'] = True
+                    transactions[transaction_id]['paid_at'] = datetime.now(timezone.utc).isoformat()
                     
-                    transaction_id = data.get('transaction_id')
-                    
-                    if not transaction_id:
-                        self.send_cors_response(400, {'error': 'Transaction ID required'})
-                        return
-                    
-                    transaction = transactions.get(transaction_id)
-                    if not transaction:
-                        self.send_cors_response(404, {'error': 'Transaction not found'})
-                        return
-                    
-                    # Check if expired
-                    expires_at = datetime.fromisoformat(transaction['expires_at'].replace('Z', '+00:00'))
-                    if datetime.now(timezone.utc) > expires_at:
-                        transaction['status'] = 'expired'
-                        self.send_cors_response(400, {'error': 'Transaction expired'})
-                        return
-                    
-                    # Check if already processed
-                    if transaction['status'] != 'pending':
-                        self.send_cors_response(400, {'error': f'Transaction already {transaction["status"]}'})
-                        return
-                    
-                    # Mock World ID verification
-                    print(f"🔒 Mock World ID verification for {transaction_id}")
-                    
-                    # Update status to dispensing
-                    transaction['status'] = 'dispensing'
-                    transaction['progress'] = 50
-                    
-                    # Mock dispense quarters
-                    print(f"🪙 Mock dispensing {transaction['quarters']} quarters...")
-                    time.sleep(1)
-                    
-                    # Complete transaction
-                    transaction['status'] = 'complete'
-                    transaction['progress'] = 100
-                    transaction['paid_at'] = datetime.now(timezone.utc).isoformat()
-                    
-                    print(f"✅ Transaction {transaction_id} completed successfully")
-                    
-                    self.send_cors_response(200, transaction)
-                    return
-                    
-                except Exception as e:
-                    print(f"❌ Payment processing error: {e}")
-                    self.send_cors_response(500, {'error': str(e)})
-                    return
+                    self.send_cors_response(200, {
+                        'success': True,
+                        'transaction': transactions[transaction_id]
+                    })
+                else:
+                    self.send_cors_response(404, {'error': 'Transaction not found'})
+                return
             
-            # Default response
-            self.send_cors_response(404, {'error': 'Not found', 'path': path, 'method': method})
+            # Default 404
+            self.send_cors_response(404, {'error': 'Not found'})
             
         except Exception as e:
-            print(f"❌ Handler error: {e}")
-            self.send_cors_response(500, {'error': f'Internal server error: {str(e)}'})
+            print(f"❌ Error: {str(e)}")
+            self.send_cors_response(500, {'error': 'Internal server error', 'details': str(e)})
     
     def send_cors_response(self, status_code, data):
-        """Send response with CORS headers"""
+        """Send JSON response with CORS headers"""
+        response_data = json.dumps(data).encode('utf-8')
+        
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.send_header('Content-Length', str(len(response_data)))
         self.end_headers()
         
-        response_body = json.dumps(data, default=str)
-        self.wfile.write(response_body.encode('utf-8'))
+        self.wfile.write(response_data)
 
 # Vercel entry point
 def app(environ, start_response):
