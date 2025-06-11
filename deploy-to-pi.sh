@@ -1,8 +1,6 @@
 #!/bin/bash
-"""
-RoluATM Raspberry Pi Deployment Script
-Automates the complete setup of RoluATM on Raspberry Pi 4B with 7" touchscreen
-"""
+# RoluATM Raspberry Pi Deployment Script
+# Automates the complete setup of RoluATM on Raspberry Pi 4B with 7" touchscreen
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,8 +10,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-PROJECT_DIR="/home/pi/RoluATM"
-USER="pi"
+PROJECT_DIR="/home/rahiim/RoluATM"
+USER="rahiim"
 LOG_FILE="/tmp/rolu-deployment.log"
 
 # Logging functions
@@ -54,8 +52,8 @@ if ! grep -q "Raspberry Pi" /proc/cpuinfo 2>/dev/null; then
 fi
 
 # Ask for confirmation
-read -p "Continue with RoluATM deployment? (y/N): " -n 1 -r
-echo
+echo -n "Continue with RoluATM deployment? (y/N): "
+read -r REPLY
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Deployment cancelled"
     exit 1
@@ -148,9 +146,9 @@ if [ -d "$PROJECT_DIR" ]; then
     sudo mv "$PROJECT_DIR" "${PROJECT_DIR}.backup.$(date +%s)"
 fi
 
-# Clone project (assuming it's already pushed to GitHub)
+# Clone project
 log "Cloning RoluATM project..."
-cd /home/pi
+cd /home/$USER
 git clone https://github.com/abdulrahimiqbal/RoluATM.git
 
 cd "$PROJECT_DIR"
@@ -161,8 +159,15 @@ sudo chown -R $USER:$USER "$PROJECT_DIR"
 # Phase 7: Install project dependencies
 log "📦 Phase 7: Installing project dependencies"
 
-log "Installing Node.js dependencies..."
+log "Installing Node.js dependencies for kiosk app..."
+cd kiosk-app
 npm install
+cd ..
+
+log "Installing Node.js dependencies for mini app..."
+cd mini-app
+npm install
+cd ..
 
 log "Setting up Python virtual environment..."
 python3 -m venv venv
@@ -177,9 +182,14 @@ log "⚙️ Phase 8: Configuring environment"
 # Create environment file
 if [ ! -f ".env.local" ]; then
     log "Creating environment configuration..."
-    cat > .env.local << EOF
+    cat > .env.local << 'EOF'
 # RoluATM Raspberry Pi Configuration
-# Generated on $(date)
+# Database Configuration (Local PostgreSQL)
+DATABASE_URL=postgresql://rolu:rolu123@localhost:5432/roluatm
+
+# World ID Configuration (REPLACE WITH YOUR ACTUAL VALUES)
+VITE_WORLD_APP_ID=app_staging_c6e6bc4b19c31866df3d9d02b6a5b4db
+WORLD_CLIENT_SECRET=sk_c89f32b0b0d0e2fda1d8b93c40e3e6f3c01a5b19
 
 # API Configuration
 VITE_API_URL=http://localhost:8000
@@ -191,180 +201,187 @@ TFLEX_PORT=/dev/ttyUSB0
 DEV_MODE=false
 KIOSK_MODE=true
 
-# Database Configuration (Local PostgreSQL)
-DATABASE_URL=postgresql://rolu:rolu123@localhost:5432/roluatm
-
-# World ID Configuration (REPLACE WITH YOUR ACTUAL VALUES)
-VITE_WORLD_APP_ID=app_staging_c6e6bc4b19c31866df3d9d02b6a5b4db
-WORLD_CLIENT_SECRET=sk_c89f32b0b0d0e2fda1d8b93c40e3e6f3c01a5b19
-
-# Mini App URL (Production Vercel deployment)
+# Mini App URL (using production Vercel deployment)
 MINI_APP_URL=https://mini-app-azure.vercel.app
-
-# Display Configuration
-DISPLAY_WIDTH=800
-DISPLAY_HEIGHT=480
 EOF
-
-    log "Environment file created at .env.local"
-    log_warning "Please update .env.local with your actual World ID credentials!"
-else
-    log "Environment file already exists"
 fi
 
-# Phase 9: Initialize database
-log "🗄️ Phase 9: Setting up database tables"
+# Phase 9: Set up database schema
+log "🗄️ Phase 9: Setting up database schema"
 
-# Create database schema
-source venv/bin/activate
-python3 << EOF
-import os
-os.environ['DATABASE_URL'] = 'postgresql://rolu:rolu123@localhost:5432/roluatm'
-
-# Read and execute schema
-with open('schema.sql', 'r') as f:
-    schema = f.read()
-
+log "Creating database tables..."
+python3 -c "
 import psycopg2
-conn = psycopg2.connect(os.environ['DATABASE_URL'])
+import os
+
+# Database connection
+conn = psycopg2.connect('postgresql://rolu:rolu123@localhost:5432/roluatm')
 cur = conn.cursor()
-cur.execute(schema)
+
+# Create transactions table
+cur.execute('''
+CREATE TABLE IF NOT EXISTS transactions (
+    id VARCHAR(36) PRIMARY KEY,
+    amount DECIMAL(10,2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    nullifier_hash VARCHAR(256),
+    progress VARCHAR(50) DEFAULT 'created',
+    expires_at TIMESTAMP,
+    mini_app_url TEXT,
+    paid_at TIMESTAMP
+);
+''')
+
+# Create indexes
+cur.execute('CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);')
+cur.execute('CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);')
+cur.execute('CREATE INDEX IF NOT EXISTS idx_transactions_nullifier_hash ON transactions(nullifier_hash);')
+
 conn.commit()
 cur.close()
 conn.close()
-print("Database schema created successfully")
-EOF
+print('Database schema created successfully')
+"
 
-# Phase 10: Configure system for kiosk mode
-log "🖥️ Phase 10: Configuring kiosk mode"
+# Phase 10: Create systemd services
+log "🔧 Phase 10: Creating systemd services"
 
-# Add user to necessary groups
-sudo usermod -a -G dialout $USER
-sudo usermod -a -G video $USER
-sudo usermod -a -G input $USER
-
-# Create systemd service for auto-start
-sudo tee /etc/systemd/system/rolu-kiosk.service > /dev/null << EOF
+# Backend service
+sudo tee /etc/systemd/system/rolu-backend.service > /dev/null << EOF
 [Unit]
-Description=RoluATM Kiosk Service
-After=graphical-session.target
-Wants=graphical-session.target
+Description=RoluATM Backend Service
+After=network.target postgresql.service
 
 [Service]
 Type=simple
 User=$USER
-Group=$USER
 WorkingDirectory=$PROJECT_DIR
-Environment=DISPLAY=:0
-ExecStart=$PROJECT_DIR/start-kiosk.sh
+Environment=PATH=/usr/bin:/usr/local/bin:$PROJECT_DIR/venv/bin
+ExecStart=$PROJECT_DIR/venv/bin/python pi_backend.py
 Restart=always
 RestartSec=10
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=multi-user.target
 EOF
 
-# Make scripts executable
-chmod +x start-kiosk.sh
-chmod +x test-pi-deployment.sh
+# Kiosk service
+sudo tee /etc/systemd/system/rolu-kiosk.service > /dev/null << EOF
+[Unit]
+Description=RoluATM Kiosk Service
+After=network.target rolu-backend.service
 
-# Phase 11: Configure display and boot settings
-log "📺 Phase 11: Configuring display settings"
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$PROJECT_DIR/kiosk-app
+Environment=PATH=/usr/bin:/usr/local/bin
+ExecStart=/usr/bin/npm run dev
+Restart=always
+RestartSec=10
 
-# Configure boot settings for touchscreen
-sudo tee -a /boot/config.txt > /dev/null << EOF
-
-# RoluATM Kiosk Display Configuration
-# Disable overscan for exact screen size
-disable_overscan=1
-
-# Enable touchscreen
-dtoverlay=vc4-kms-v3d
-max_framebuffers=2
-
-# Set specific resolution for 7" display
-hdmi_force_hotplug=1
-hdmi_group=2
-hdmi_mode=87
-hdmi_cvt=800 480 60 6 0 0 0
-
-# GPU memory split
-gpu_mem=128
+[Install]
+WantedBy=multi-user.target
 EOF
 
-# Configure auto-login and disable screen saver
-sudo raspi-config nonint do_boot_behaviour B4  # Desktop autologin
+# Auto-start kiosk in browser on boot
+sudo tee /etc/systemd/system/rolu-browser.service > /dev/null << EOF
+[Unit]
+Description=RoluATM Kiosk Browser
+After=graphical.target rolu-kiosk.service
+Wants=graphical.target
 
-# Disable screen blanking
-sudo tee -a /home/$USER/.bashrc > /dev/null << EOF
+[Service]
+Type=simple
+User=$USER
+Environment=DISPLAY=:0
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/bin/chromium-browser --start-fullscreen --kiosk --no-toolbar --no-menubar --no-context-menu --disable-infobars --disable-session-crashed-bubble --disable-restore-session-state http://localhost:3000
+Restart=always
+RestartSec=5
 
-# RoluATM Kiosk Settings
-# Disable screen blanking
-export DISPLAY=:0
-xset s off
-xset -dpms
-xset s noblank
+[Install]
+WantedBy=graphical.target
 EOF
 
-# Phase 12: Final setup and testing
-log "🧪 Phase 12: Final setup and testing"
-
-# Build the frontend
-log "Building frontend..."
-npm run build
-
-# Test database connection
-log "Testing database connection..."
-source venv/bin/activate
-python3 -c "
-import psycopg2
-import os
-os.environ['DATABASE_URL'] = 'postgresql://rolu:rolu123@localhost:5432/roluatm'
-conn = psycopg2.connect(os.environ['DATABASE_URL'])
-print('Database connection successful')
-conn.close()
-"
-
-# Enable the kiosk service (but don't start yet)
+# Reload systemd and enable services
 sudo systemctl daemon-reload
+sudo systemctl enable rolu-backend.service
 sudo systemctl enable rolu-kiosk.service
+sudo systemctl enable rolu-browser.service
 
-# Create logs directory
-mkdir -p logs
+# Phase 11: Configure auto-login and kiosk mode
+log "🖥️ Phase 11: Configuring kiosk mode"
 
-# Phase 13: Summary and next steps
-log "✅ Deployment completed successfully!"
+# Enable auto-login
+sudo systemctl enable getty@tty1.service
+sudo mkdir -p /etc/systemd/system/getty@tty1.service.d
+sudo tee /etc/systemd/system/getty@tty1.service.d/override.conf > /dev/null << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --noissue --autologin $USER %I \$TERM
+Type=idle
+EOF
 
+# Configure auto-start X11 and browser
+if [ ! -f "/home/$USER/.xinitrc" ]; then
+    cat > /home/$USER/.xinitrc << EOF
+#!/bin/bash
+xset -dpms     # disable DPMS (Energy Star) features.
+xset s off     # disable screen saver
+xset s noblank # don't blank the video device
+unclutter -idle 0 &
+exec openbox-session
+EOF
+    chmod +x /home/$USER/.xinitrc
+fi
+
+# Auto-start X11 in .bashrc
+if ! grep -q "startx" /home/$USER/.bashrc; then
+    echo "# Auto-start X11 for kiosk mode" >> /home/$USER/.bashrc
+    echo "if [ -z \"\$DISPLAY\" ] && [ \"\$(tty)\" = \"/dev/tty1\" ]; then" >> /home/$USER/.bashrc
+    echo "    startx" >> /home/$USER/.bashrc
+    echo "fi" >> /home/$USER/.bashrc
+fi
+
+# Phase 12: Final setup
+log "✅ Phase 12: Final configuration"
+
+# Start services
+log "Starting services..."
+sudo systemctl start rolu-backend.service
+
+# Wait a moment for backend to start
+sleep 5
+
+sudo systemctl start rolu-kiosk.service
+
+# Show status
+log "Service status:"
+systemctl is-active rolu-backend.service && log "✅ Backend service: Running" || log_error "❌ Backend service: Failed"
+systemctl is-active rolu-kiosk.service && log "✅ Kiosk service: Running" || log_error "❌ Kiosk service: Failed"
+
+# Final message
 echo -e "${GREEN}"
-echo "🎉 RoluATM Raspberry Pi Deployment Complete!"
-echo "============================================="
+echo "🎉 RoluATM Deployment Complete!"
+echo "================================"
+echo ""
+echo "✅ Backend running on: http://localhost:8000"
+echo "✅ Kiosk app running on: http://localhost:3000"
+echo "✅ Database: PostgreSQL (local)"
+echo "✅ Services: Auto-start enabled"
+echo ""
+echo "📱 Access your kiosk at: http://$(hostname -I | awk '{print $1}'):3000"
+echo ""
+echo "🔧 To check status:"
+echo "   sudo systemctl status rolu-backend"
+echo "   sudo systemctl status rolu-kiosk"
+echo ""
+echo "📋 Logs available at: $LOG_FILE"
+echo ""
+echo "🔄 Reboot to enable full kiosk mode:"
+echo "   sudo reboot"
 echo -e "${NC}"
 
-echo -e "${BLUE}📋 What was installed:${NC}"
-echo "  ✅ Node.js $(node --version)"
-echo "  ✅ Python $(python3 --version)"
-echo "  ✅ PostgreSQL database with 'roluatm' database"
-echo "  ✅ Chromium browser for kiosk mode"
-echo "  ✅ RoluATM project dependencies"
-echo "  ✅ Systemd service for auto-start"
-
-echo -e "${BLUE}📁 Project location:${NC} $PROJECT_DIR"
-echo -e "${BLUE}📄 Logs location:${NC} $PROJECT_DIR/logs/"
-echo -e "${BLUE}⚙️ Config file:${NC} $PROJECT_DIR/.env.local"
-
-echo -e "${YELLOW}⚠️ IMPORTANT NEXT STEPS:${NC}"
-echo "1. Edit $PROJECT_DIR/.env.local with your actual World ID credentials"
-echo "2. Connect your T-Flex coin dispenser via USB"
-echo "3. Test the setup: cd $PROJECT_DIR && ./test-pi-deployment.sh"
-echo "4. Start manually: cd $PROJECT_DIR && ./start-kiosk.sh"
-echo "5. Enable auto-start on boot: sudo systemctl start rolu-kiosk.service"
-
-echo -e "${BLUE}🔧 Manual testing commands:${NC}"
-echo "  Test backend: cd $PROJECT_DIR && source venv/bin/activate && python pi_backend.py"
-echo "  Test kiosk:   cd $PROJECT_DIR && ./start-kiosk.sh"
-echo "  View logs:    tail -f $PROJECT_DIR/logs/kiosk.log"
-
-echo -e "${GREEN}🚀 Reboot your Pi to apply all display settings!${NC}"
-
-log "Deployment log saved to: $LOG_FILE"
-log "Deployment completed at $(date)" 
+log "RoluATM deployment completed successfully!" 
