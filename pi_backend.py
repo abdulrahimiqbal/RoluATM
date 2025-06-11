@@ -159,7 +159,11 @@ class DatabaseManager:
                 
                 # Calculate quarters for display (4 quarters per dollar)
                 quarters = int(fiat_amount * 4)
+                
+                # Add frontend-expected fields
                 transaction['quarters'] = quarters
+                transaction['amount'] = float(fiat_amount)  # Frontend expects 'amount'
+                transaction['total'] = float(fiat_amount) + 0.50  # Add fee for total
                 
                 conn.commit()
                 logger.info(f"✅ Created transaction {transaction_id} for ${fiat_amount} ({quarters} quarters)")
@@ -182,6 +186,12 @@ class DatabaseManager:
                 
                 columns = [desc[0] for desc in cur.description]
                 transaction = dict(zip(columns, row))
+                
+                # Add frontend-expected fields if they don't exist
+                if 'amount' not in transaction and 'fiat_amount' in transaction:
+                    transaction['amount'] = float(transaction['fiat_amount'])
+                    transaction['total'] = float(transaction['fiat_amount']) + 0.50
+                    transaction['quarters'] = int(transaction['fiat_amount'] * 4)
                 
                 return transaction
         except Exception as e:
