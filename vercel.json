@@ -1,0 +1,59 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "installCommand": "npm install",
+  "devCommand": "npm run dev",
+  "functions": {
+    "server/app.py": {
+      "runtime": "python3.9"
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/server/app.py"
+    },
+    {
+      "src": "/health",
+      "dest": "/server/app.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "VITE_WORLD_APP_ID": "@world_app_id",
+    "VITE_API_URL": "https://your-app.vercel.app",
+    "WORLD_CLIENT_SECRET": "@world_client_secret",
+    "DATABASE_URL": "@database_url",
+    "DEV_MODE": "false",
+    "MINI_APP_URL": "https://your-mini-app.vercel.app"
+  },
+  "build": {
+    "env": {
+      "VITE_WORLD_APP_ID": "@world_app_id",
+      "VITE_API_URL": "https://your-app.vercel.app"
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ]
+} 

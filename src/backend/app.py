@@ -8,19 +8,27 @@ import os
 import sys
 import json
 import logging
+import time
+import threading
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
-from flask import Flask, request, jsonify
+import psycopg
+from psycopg.rows import dict_row
+import jwt
+from marshmallow import ValidationError
+from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from dotenv import load_dotenv
 
 from driver_tflex import TFlex
 from settings import Settings
 
-# Load environment variables
+# Import configuration from environment
+# Load from .env.local first, then fallback to .env
+load_dotenv('.env.local')
 load_dotenv()
 
 # Configure logging
@@ -36,6 +44,22 @@ CORS(app, origins="*" if os.getenv("DEV_MODE", "false").lower() == "true" else [
 # Initialize settings and hardware
 settings = Settings()
 tflex = TFlex(port=settings.TFLEX_PORT)
+
+# Configuration
+DATABASE_URL = os.getenv('DATABASE_URL')
+WORLD_CLIENT_SECRET = os.getenv('WORLD_CLIENT_SECRET')
+WORLD_APP_ID = os.getenv('VITE_WORLD_APP_ID')
+KIOSK_LOCATION = os.getenv('KIOSK_LOCATION', 'Development')
+
+# Database connection
+def get_db_connection():
+    """Get database connection using psycopg3"""
+    try:
+        conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        return conn
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}")
+        raise
 
 @dataclass
 class WithdrawRequest:
@@ -253,26 +277,65 @@ def get_hardware_status():
 def process_withdrawal():
     """Process crypto-to-cash withdrawal"""
     try:
+        # Input validation - check content type
+        if not request.is_json:
+            return jsonify({"error": "Content-Type must be application/json"}), 400
+            
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
         
-        # Validate request
+        # Comprehensive field validation
         required_fields = ["proof", "nullifierHash", "merkleRoot", "amountUsd"]
         for field in required_fields:
             if field not in data:
-                return jsonify({"error": f"Missing field: {field}"}), 400
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+            if not data[field] or (isinstance(data[field], str) and not data[field].strip()):
+                return jsonify({"error": f"Field {field} cannot be empty"}), 400
+        
+        # Type validation and sanitization
+        try:
+            amount_usd = float(data["amountUsd"])
+        except (ValueError, TypeError):
+            return jsonify({"error": "amountUsd must be a valid number"}), 400
+            
+        # String field validation
+        proof = str(data["proof"]).strip()
+        nullifier_hash = str(data["nullifierHash"]).strip()
+        merkle_root = str(data["merkleRoot"]).strip()
+        
+        if len(proof) < 10 or len(nullifier_hash) < 10 or len(merkle_root) < 10:
+            return jsonify({"error": "Invalid proof data format"}), 400
         
         withdraw_req = WithdrawRequest(
-            proof=data["proof"],
-            nullifier_hash=data["nullifierHash"],
-            merkle_root=data["merkleRoot"],
-            amount_usd=float(data["amountUsd"])
+            proof=proof,
+            nullifier_hash=nullifier_hash,
+            merkle_root=merkle_root,
+            amount_usd=amount_usd
         )
         
-        # Validate amount
-        if withdraw_req.amount_usd <= 0 or withdraw_req.amount_usd > 500:
-            return jsonify({"error": "Invalid withdrawal amount"}), 400
+        # Amount validation with detailed error messages
+        if withdraw_req.amount_usd <= 0:
+            return jsonify({"error": "Withdrawal amount must be greater than $0"}), 400
+        if withdraw_req.amount_usd > 500:
+            return jsonify({"error": "Withdrawal amount cannot exceed $500"}), 400
+        if withdraw_req.amount_usd < 1:
+            return jsonify({"error": "Minimum withdrawal amount is $1.00"}), 400
+        
+        # Check for duplicate nullifier hash (prevent replay attacks)
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM transactions WHERE nullifier_hash = %s",
+                    (withdraw_req.nullifier_hash,)
+                )
+                if cur.fetchone():
+                    return jsonify({"error": "Transaction already processed"}), 400
+            conn.close()
+        except Exception as e:
+            logger.error(f"Database validation error: {e}")
+            return jsonify({"error": "Validation failed"}), 500
         
         # Generate transaction ID
         tx_id = f"WC-{datetime.now().strftime('%Y%m%d')}-{os.urandom(2).hex().upper()}"
