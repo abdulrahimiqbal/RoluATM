@@ -69,7 +69,9 @@ export default function TransactionPage() {
       setPaymentStatus("success");
       toast({
         title: "Payment Successful!",
-        description: "Your quarters are being dispensed at the kiosk.",
+        description: worldId.isDevelopment 
+          ? "Mock payment completed! (Development mode)" 
+          : "Your quarters are being dispensed at the kiosk.",
       });
     },
     onError: (error) => {
@@ -86,7 +88,9 @@ export default function TransactionPage() {
     if (!transaction || !worldId.isReady) {
       toast({
         title: "Not Ready",
-        description: "Please wait for World ID to initialize.",
+        description: worldId.isDevelopment 
+          ? "Development mode initializing..." 
+          : "Please wait for World ID to initialize.",
         variant: "destructive",
       });
       return;
@@ -96,7 +100,7 @@ export default function TransactionPage() {
     setPaymentStatus("processing");
 
     try {
-      // Verify World ID
+      // Verify World ID (or mock in development)
       const proof = await worldId.verify(
         `rolu-atm-${transaction.id}`,
         "payment"
@@ -114,7 +118,9 @@ export default function TransactionPage() {
       setPaymentStatus("error");
       toast({
         title: "Verification Failed",
-        description: error.message || "World ID verification was cancelled or failed",
+        description: error.message || (worldId.isDevelopment 
+          ? "Mock verification failed" 
+          : "World ID verification was cancelled or failed"),
         variant: "destructive",
       });
     } finally {

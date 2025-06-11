@@ -17,14 +17,28 @@ interface UseWorldIdReturn {
   verify: (signal: string, action: string) => Promise<WorldIdProof>;
   getWalletBalance: () => Promise<WalletBalance>;
   isReady: boolean;
+  isDevelopment: boolean;
 }
+
+// Development mode detection
+const isDevelopmentMode = () => {
+  return !MiniKit.isInstalled() && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname.includes('vercel.app')
+  );
+};
 
 export function useWorldId(): UseWorldIdReturn {
   const [isReady, setIsReady] = useState(false);
+  const isDevelopment = isDevelopmentMode();
 
   useEffect(() => {
-    // Check if MiniKit is ready
-    if (MiniKit.isInstalled()) {
+    if (isDevelopment) {
+      // In development mode, consider it ready immediately
+      setIsReady(true);
+      console.log('🔧 Development mode: MiniKit functionality will be mocked');
+    } else if (MiniKit.isInstalled()) {
       setIsReady(true);
     } else {
       // Listen for MiniKit installation
@@ -38,10 +52,22 @@ export function useWorldId(): UseWorldIdReturn {
       
       return () => clearInterval(interval);
     }
-  }, []);
+  }, [isDevelopment]);
 
   const verify = async (signal: string, action: string): Promise<WorldIdProof> => {
     try {
+      if (isDevelopment) {
+        // Mock verification for development
+        console.log('🔧 Mock World ID verification:', { signal, action });
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate delay
+        
+        return {
+          proof: 'mock_proof_' + Math.random().toString(36).substring(7),
+          nullifier_hash: 'mock_nullifier_' + Math.random().toString(36).substring(7),
+          merkle_root: 'mock_merkle_' + Math.random().toString(36).substring(7)
+        };
+      }
+
       if (!MiniKit.isInstalled()) {
         throw new Error('World App not detected');
       }
@@ -67,6 +93,16 @@ export function useWorldId(): UseWorldIdReturn {
   };
 
   const getWalletBalance = async (): Promise<WalletBalance> => {
+    if (isDevelopment) {
+      // Mock wallet balance for development
+      console.log('🔧 Mock wallet balance');
+      return {
+        usd: 125.50,
+        crypto: 52.42,
+        symbol: "WLD"
+      };
+    }
+
     if (typeof window !== 'undefined' && window.MiniKit) {
       try {
         // Authenticate wallet connection first
@@ -115,6 +151,7 @@ export function useWorldId(): UseWorldIdReturn {
   return {
     isReady,
     verify,
-    getWalletBalance
+    getWalletBalance,
+    isDevelopment
   };
 }
