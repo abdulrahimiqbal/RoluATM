@@ -14,10 +14,18 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 # Configuration
-MINI_APP_URL = "http://localhost:3001"
+MINI_APP_URL = os.getenv("MINI_APP_URL", "http://localhost:3001")
 DATABASE_URL = "postgresql://neondb_owner:npg_BwRjLZD4Qp0V@ep-crimson-meadow-a81cmjla-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
 TFLEX_PORT = "/dev/ttyUSB0"  # Your T-Flex serial port
 PORT = 8000
+
+# CORS allowed origins
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",                # Local kiosk dev
+    "http://localhost:3001",                # Local mini dev
+    "https://rolu-atm-kiosk.vercel.app",   # Production kiosk
+    "https://rolu-atm-mini.vercel.app",    # Production mini
+]
 
 # In-memory transactions (you can add database later)
 transactions = {}
@@ -133,8 +141,14 @@ class RoluATMHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Not found")
     
     def send_cors_headers(self):
+        origin = self.headers.get('Origin')
+        if origin in ALLOWED_ORIGINS:
+            allowed_origin = origin
+        else:
+            allowed_origin = ALLOWED_ORIGINS[0]  # Default to localhost for development
+        
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', allowed_origin)
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.send_header('Content-Type', 'application/json')

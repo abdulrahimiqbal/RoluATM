@@ -5,11 +5,11 @@
   "installCommand": "npm install",
   "devCommand": "npm run dev",
   "env": {
-    "VITE_API_URL": "http://localhost:8000"
+    "VITE_API_URL": "@vite_api_url"
   },
   "build": {
     "env": {
-      "VITE_API_URL": "http://localhost:8000"
+      "VITE_API_URL": "@vite_api_url"
     }
   }
 } 

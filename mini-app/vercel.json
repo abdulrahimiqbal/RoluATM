@@ -5,13 +5,13 @@
   "installCommand": "npm install",
   "devCommand": "npm run dev",
   "env": {
-    "VITE_API_URL": "http://localhost:8000",
-    "VITE_WORLD_APP_ID": "app_staging_c6e6bc4b19c31866df3d9d02b6a5b4db"
+    "VITE_API_URL": "@vite_api_url",
+    "VITE_WORLD_APP_ID": "@vite_world_app_id"
   },
   "build": {
     "env": {
-      "VITE_API_URL": "http://localhost:8000",
-      "VITE_WORLD_APP_ID": "app_staging_c6e6bc4b19c31866df3d9d02b6a5b4db"
+      "VITE_API_URL": "@vite_api_url",
+      "VITE_WORLD_APP_ID": "@vite_world_app_id"
     }
   }
 } 
