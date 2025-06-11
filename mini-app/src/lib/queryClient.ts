@@ -1,5 +1,31 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Configure API base URL - support for local backend testing
+const getApiBaseUrl = () => {
+  // Check if there's a URL parameter for the backend URL (for testing)
+  const urlParams = new URLSearchParams(window.location.search);
+  const backendParam = urlParams.get('backend');
+  
+  if (backendParam) {
+    // Allow connecting to local backend for testing
+    if (backendParam === 'local') {
+      return 'http://localhost:8000';
+    }
+    return backendParam;
+  }
+  
+  // Check environment variable (for Vercel deployment)
+  const envApiUrl = (import.meta as any).env?.VITE_API_BASE_URL;
+  if (envApiUrl) {
+    return envApiUrl;
+  }
+  
+  // Default to relative URLs (same domain)
+  return '';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -12,11 +38,14 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  
+  const res = await fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    // Remove credentials when connecting to different domain
+    ...(API_BASE_URL && !API_BASE_URL.includes(window.location.host) ? {} : { credentials: "include" }),
   });
 
   await throwIfResNotOk(res);
@@ -29,8 +58,13 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey[0] as string, {
-      credentials: "include",
+    const fullUrl = (queryKey[0] as string).startsWith('http') 
+      ? (queryKey[0] as string) 
+      : `${API_BASE_URL}${queryKey[0]}`;
+    
+    const res = await fetch(fullUrl, {
+      // Remove credentials when connecting to different domain
+      ...(API_BASE_URL && !API_BASE_URL.includes(window.location.host) ? {} : { credentials: "include" }),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
