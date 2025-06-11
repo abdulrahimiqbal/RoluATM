@@ -46,6 +46,7 @@ print("🎰 RoluATM Pi Backend Starting...")
 print(f"✅ Server: http://localhost:{PORT}")
 print(f"✅ Mini App: {MINI_APP_URL}")
 print(f"✅ T-Flex: {'Hardware Mode' if TFLEX_AVAILABLE else 'Mock Mode'}")
+print(f"🔧 DEV_MODE: {DEV_MODE}")
 
 class DecimalEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles Decimal objects"""
@@ -155,15 +156,22 @@ class DatabaseManager:
                 
                 row = cur.fetchone()
                 columns = [desc[0] for desc in cur.description]
-                transaction = dict(zip(columns, row))
+                transaction_data = dict(zip(columns, row))
                 
                 # Calculate quarters for display (4 quarters per dollar)
                 quarters = int(fiat_amount * 4)
                 
-                # Add frontend-expected fields
-                transaction['quarters'] = quarters
-                transaction['amount'] = float(fiat_amount)  # Frontend expects 'amount'
-                transaction['total'] = float(fiat_amount) + 0.50  # Add fee for total
+                # Prepare response with calculated fields for frontend compatibility
+                transaction = {
+                    'id': transaction_id,
+                    'amount': float(fiat_amount),
+                    'total': float(fiat_amount) + 0.50,  # Include 50 cent fee
+                    'quarters': quarters,
+                    'status': 'pending',
+                    'mini_app_url': f"{MINI_APP_URL}?backend=local&transaction_id={transaction_id}" if DEV_MODE else f"{MINI_APP_URL}?transaction_id={transaction_id}",
+                    'created_at': transaction_data['created_at'].isoformat(),
+                    'expires_at': transaction_data['expires_at'].isoformat()
+                }
                 
                 conn.commit()
                 logger.info(f"✅ Created transaction {transaction_id} for ${fiat_amount} ({quarters} quarters)")
