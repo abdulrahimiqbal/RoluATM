@@ -71,7 +71,7 @@ export default function KioskPage() {
     queryKey: ["/api/transaction", currentTransaction?.id],
     queryFn: async () => {
       if (!currentTransaction) return null;
-      const response = await apiRequest("GET", `/api/transaction/${currentTransaction.id}/status`);
+      const response = await apiRequest("GET", `/api/transaction/${currentTransaction.id}`);
       return response.json();
     },
     enabled: !!currentTransaction,
@@ -80,33 +80,36 @@ export default function KioskPage() {
 
   // Update local transaction state when backend status changes
   useEffect(() => {
-    if (transactionStatus && currentTransaction) {
-      setCurrentTransaction(prev => prev ? { ...prev, ...transactionStatus } : null);
-      
-      // Handle dispensing progress
-      if (transactionStatus.status === "dispensing" && transactionStatus.progress) {
-        setDispensingProgress(transactionStatus.progress);
-      }
-      
-      // Handle completion
-      if (transactionStatus.status === "complete") {
-        setDispensingProgress(100);
-        toast({
-          title: "Transaction Complete!",
-          description: `${transactionStatus.quarters} quarters have been dispensed.`,
-        });
-      }
-      
-      // Handle failures
-      if (transactionStatus.status === "failed") {
-        toast({
-          title: "Transaction Failed",
-          description: transactionStatus.error || "Something went wrong.",
-          variant: "destructive",
-        });
+    if (transactionStatus && currentTransaction && transactionStatus.id === currentTransaction.id) {
+      // Only update if the status actually changed
+      if (transactionStatus.status !== currentTransaction.status) {
+        setCurrentTransaction(prev => prev ? { ...prev, ...transactionStatus } : null);
+        
+        // Handle dispensing progress
+        if (transactionStatus.status === "dispensing" && transactionStatus.progress) {
+          setDispensingProgress(transactionStatus.progress);
+        }
+        
+        // Handle completion
+        if (transactionStatus.status === "complete") {
+          setDispensingProgress(100);
+          toast({
+            title: "Transaction Complete!",
+            description: `${transactionStatus.quarters} quarters have been dispensed.`,
+          });
+        }
+        
+        // Handle failures
+        if (transactionStatus.status === "failed") {
+          toast({
+            title: "Transaction Failed",
+            description: transactionStatus.error || "Something went wrong.",
+            variant: "destructive",
+          });
+        }
       }
     }
-  }, [transactionStatus, currentTransaction, toast]);
+  }, [transactionStatus, toast]); // Removed currentTransaction from dependencies
 
   // Create transaction mutation
   const createTransactionMutation = useMutation({

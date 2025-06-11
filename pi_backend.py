@@ -267,13 +267,30 @@ class RoluATMHandler(BaseHTTPRequestHandler):
                 })
             
             elif path.startswith('/api/transaction/'):
-                transaction_id = path.split('/')[-1]
-                transaction = db.get_transaction(transaction_id)
-                
-                if transaction:
-                    self.send_json_response(transaction)
+                # Handle both /api/transaction/{id} and /api/transaction/{id}/status
+                path_parts = path.split('/')
+                if len(path_parts) >= 4:
+                    transaction_id = path_parts[3]
+                    
+                    # Handle /api/transaction/{id}/status format
+                    if len(path_parts) == 5 and path_parts[4] == 'status':
+                        # This is the /api/transaction/{id}/status format
+                        pass  # transaction_id is already set correctly
+                    elif len(path_parts) == 4:
+                        # This is the /api/transaction/{id} format
+                        pass  # transaction_id is already set correctly
+                    else:
+                        self.send_error_response(400, 'Invalid request path')
+                        return
+                    
+                    transaction = db.get_transaction(transaction_id)
+                    
+                    if transaction:
+                        self.send_json_response(transaction)
+                    else:
+                        self.send_error_response(404, 'Transaction not found')
                 else:
-                    self.send_error_response(404, 'Transaction not found')
+                    self.send_error_response(400, 'Invalid request path')
             
             else:
                 self.send_error_response(404, 'Not found')

@@ -1,9 +1,9 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// Configure API base URL - use Pi backend for local development
+// Configure API base URL - use localhost for Mac testing, Pi IP for Pi deployment
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-    ? 'http://192.168.1.250:8000' 
+    ? 'http://localhost:8000' 
     : '');
 
 async function throwIfResNotOk(res: Response) {
