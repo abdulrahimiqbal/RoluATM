@@ -7,9 +7,9 @@ const getApiBaseUrl = () => {
   const backendParam = urlParams.get('backend');
   
   if (backendParam) {
-    // Allow connecting to local backend for testing
+    // Allow connecting to local backend for testing - use Mac's network IP
     if (backendParam === 'local') {
-      return 'http://localhost:8000';
+      return 'http://192.168.0.158:8000';
     }
     // Allow connecting to Vercel backend for testing
     if (backendParam === 'vercel') {
@@ -19,13 +19,12 @@ const getApiBaseUrl = () => {
     return backendParam;
   }
   
-  // Check environment variable (for Vercel deployment)
-  const envApiUrl = (import.meta as any).env?.VITE_API_BASE_URL;
-  if (envApiUrl) {
-    return envApiUrl;
+  // Check if running locally (for development)
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
   }
   
-  // Default to relative URLs (same domain)
+  // For deployed version, use relative URLs (same domain)
   return '';
 };
 
@@ -34,63 +33,45 @@ const API_BASE_URL = getApiBaseUrl();
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    throw new Error(`HTTP ${res.status}: ${text}`);
   }
 }
 
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
-  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+// Helper function to make API requests
+export async function apiRequest(path: string, options: RequestInit = {}) {
+  const url = API_BASE_URL ? `${API_BASE_URL}${path}` : path;
   
-  const res = await fetch(fullUrl, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    // Remove credentials when connecting to different domain
-    ...(API_BASE_URL && !API_BASE_URL.includes(window.location.host) ? {} : { credentials: "include" }),
-  });
+  // Don't include credentials when connecting to different domains
+  const fetchOptions: RequestInit = {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  };
+  
+  // Only include credentials for same-origin requests
+  if (!API_BASE_URL || API_BASE_URL.includes(window.location.hostname)) {
+    fetchOptions.credentials = 'include';
+  }
 
+  const res = await fetch(url, fetchOptions);
   await throwIfResNotOk(res);
-  return res;
+  return res.json();
 }
 
-type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const fullUrl = (queryKey[0] as string).startsWith('http') 
-      ? (queryKey[0] as string) 
-      : `${API_BASE_URL}${queryKey[0]}`;
-    
-    const res = await fetch(fullUrl, {
-      // Remove credentials when connecting to different domain
-      ...(API_BASE_URL && !API_BASE_URL.includes(window.location.host) ? {} : { credentials: "include" }),
-    });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
-
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+// Query function for React Query
+export const getQueryFn: QueryFunction = async ({ queryKey }) => {
+  const [path] = queryKey as [string];
+  return apiRequest(path);
+};
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
-    },
-    mutations: {
-      retry: false,
+      queryFn: getQueryFn,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 3,
     },
   },
 });
