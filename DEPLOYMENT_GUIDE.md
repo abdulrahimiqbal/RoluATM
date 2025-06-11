@@ -1,403 +1,94 @@
 # RoluATM Deployment Guide
 
-This guide covers deploying the RoluATM system to production environments.
+## Quick Start
 
-## Overview
+### 1. Start the System
+```bash
+./start-system.sh
+```
 
-The RoluATM system consists of three main components:
+### 2. Check Status
+```bash
+./check-status.sh
+```
 
-1. **Kiosk App** - React frontend for the Raspberry Pi touchscreen (Port 3000)
-2. **Mini App** - React app with MiniKit for World App integration (Port 3001)  
-3. **Backend API** - Python Flask server for transaction processing (Port 8000)
+### 3. Stop the System
+```bash
+./stop-system.sh
+```
 
-## Prerequisites
+## System Architecture
 
-- Raspberry Pi 4 with touchscreen display
-- T-Flex coin dispenser connected via USB/Serial
-- PostgreSQL database (Neon.tech recommended)
-- World ID app credentials
-- Node.js 18+ and Python 3.8+
+### Local Development (Current Setup)
+- **Backend**: `pi_backend.py` on http://localhost:8000
+- **Kiosk App**: React app on http://localhost:3000
+- **Mini App**: React app on http://localhost:3001
+- **Database**: Neon PostgreSQL (cloud)
 
-## 1. Raspberry Pi Setup
+### Production Deployments
+- **Kiosk App**: https://kiosk-app-xi.vercel.app
+- **Mini App**: https://mini-app-azure.vercel.app
+- **Backend**: Can be deployed to Vercel or run on Raspberry Pi
 
-### Hardware Setup
+## Testing the Flow
 
-1. **Install Raspberry Pi OS**
-   ```bash
-   # Use Raspberry Pi Imager to flash latest Pi OS Lite
-   # Enable SSH, set user credentials
-   ```
+1. **Open Kiosk**: http://localhost:3000
+2. **Select Amount**: Choose $5, $10, or $20
+3. **Get QR Code**: System generates QR with transaction ID
+4. **Scan QR**: Opens mini app with `?backend=local&transaction_id=...`
+5. **Mini App**: Connects to local backend, shows transaction details
+6. **World ID**: Verify identity (mock mode enabled)
+7. **Payment**: Complete transaction and dispense coins
 
-2. **Connect Hardware**
-   - Connect 7" touchscreen display
-   - Connect T-Flex coin dispenser via USB
-   - Ensure power supply can handle both Pi and dispenser
+## Environment Variables
 
-3. **Install Dependencies**
-   ```bash
-   # Update system
-   sudo apt update && sudo apt upgrade -y
-   
-   # Install Node.js 18
-   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-   sudo apt-get install -y nodejs
-   
-   # Install Python dependencies
-   sudo apt install -y python3-pip python3-venv
-   
-   # Install system dependencies
-   sudo apt install -y git nginx
-   ```
+```bash
+WORLD_CLIENT_SECRET="sk_c89f32b0b0d0e2fda1d8b93c40e3e6f3c01a5b19"
+DATABASE_URL="postgresql://neondb_owner:npg_BwRjLZD4Qp0V@ep-crimson-meadow-a81cmjla-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
+DEV_MODE="true"
+MINI_APP_URL="https://mini-app-azure.vercel.app"
+```
 
-### Application Deployment
+## Troubleshooting
 
-1. **Clone Repository**
-   ```bash
-   cd /home/pi
-   git clone https://github.com/your-username/RoluATM.git
-   cd RoluATM
-   ```
+### Port Conflicts
+```bash
+./stop-system.sh
+./start-system.sh
+```
 
-2. **Configure Environment**
-   ```bash
-   # Copy environment template
-   cp env.example .env.local
-   
-   # Edit with your credentials
-   nano .env.local
-   ```
+### Check Logs
+- Backend logs appear in terminal when running `start-system.sh`
+- Frontend logs appear in browser console
 
-   Required environment variables:
-   ```env
-   VITE_WORLD_APP_ID=your_world_app_id
-   WORLD_CLIENT_SECRET=your_world_client_secret
-   DATABASE_URL=your_neon_database_url
-   TFLEX_PORT=/dev/ttyUSB0
-   DEV_MODE=false
-   MINI_APP_URL=https://your-mini-app-domain.com
-   ```
+### Manual Testing
+```bash
+# Test backend health
+curl http://localhost:8000/health
 
-3. **Install Dependencies**
-   ```bash
-   # Install root dependencies
-   npm install
-   
-   # Install kiosk app dependencies
-   cd kiosk-app && npm install && cd ..
-   
-   # Install backend dependencies
-   cd server
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   cd ..
-   ```
+# Create test transaction
+curl -X POST http://localhost:8000/api/transaction/create \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 5}'
+```
 
-4. **Build Kiosk App**
-   ```bash
-   cd kiosk-app
-   npm run build
-   cd ..
-   ```
+## Deployment Options
 
-5. **Configure Nginx**
-   ```bash
-   sudo cp nginx.conf /etc/nginx/sites-available/roluatm
-   sudo ln -s /etc/nginx/sites-available/roluatm /etc/nginx/sites-enabled/
-   sudo rm /etc/nginx/sites-enabled/default
-   sudo nginx -t
-   sudo systemctl reload nginx
-   ```
+### Option 1: Hybrid (Current)
+- Local backend for development
+- Deployed frontends on Vercel
+- Best for testing and development
 
-6. **Create System Services**
-   ```bash
-   # Backend service
-   sudo tee /etc/systemd/system/roluatm-backend.service << EOF
-   [Unit]
-   Description=RoluATM Backend Service
-   After=network.target
-   
-   [Service]
-   Type=simple
-   User=pi
-   WorkingDirectory=/home/pi/RoluATM/server
-   Environment=PATH=/home/pi/RoluATM/server/venv/bin
-   ExecStart=/home/pi/RoluATM/server/venv/bin/python app.py
-   Restart=always
-   RestartSec=10
-   
-   [Install]
-   WantedBy=multi-user.target
-   EOF
-   
-   # Enable and start services
-   sudo systemctl daemon-reload
-   sudo systemctl enable roluatm-backend
-   sudo systemctl start roluatm-backend
-   ```
+### Option 2: Full Cloud
+- Deploy backend to Vercel
+- Use deployed frontends
+- Best for production without Pi
 
-7. **Configure Display and Touch**
-   ```bash
-   # Add to /boot/config.txt
-   sudo tee -a /boot/config.txt << EOF
-   
-   # 7" Touchscreen
-   lcd_rotate=2
-   display_rotate=2
-   
-   # Disable sleep/screensaver
-   hdmi_blanking=1
-   EOF
-   ```
+### Option 3: Full Local
+- Run everything locally
+- Best for Pi deployment
 
-8. **Setup Kiosk Mode**
-   ```bash
-   # Install minimal window manager
-   sudo apt install -y openbox chromium-browser unclutter
-   
-   # Create autostart script
-   mkdir -p /home/pi/.config/openbox
-   tee /home/pi/.config/openbox/autostart << EOF
-   # Disable screen blanking
-   xset s off
-   xset -dpms
-   xset s noblank
-   
-   # Hide cursor
-   unclutter -idle 0.5 -root &
-   
-   # Start Chromium in kiosk mode
-   chromium-browser --noerrdialogs --disable-infobars --kiosk http://localhost --check-for-update-interval=1 --simulate-critical-update &
-   EOF
-   
-   # Set up autologin to GUI
-   sudo raspi-config
-   # Choose: System Options > Boot / Auto Login > Desktop Autologin
-   ```
-
-## 2. Mini App Deployment (Vercel)
-
-### Setup Vercel Project
-
-1. **Install Vercel CLI**
-   ```bash
-   npm install -g vercel
-   ```
-
-2. **Configure Mini App**
-   ```bash
-   cd mini-app
-   
-   # Create vercel.json configuration
-   cat > vercel.json << EOF
-   {
-     "version": 2,
-     "builds": [
-       {
-         "src": "package.json",
-         "use": "@vercel/static-build",
-         "config": {
-           "distDir": "dist"
-         }
-       }
-     ],
-     "routes": [
-       {
-         "src": "/(.*)",
-         "dest": "/index.html"
-       }
-     ],
-     "env": {
-       "VITE_WORLD_APP_ID": "@world_app_id",
-       "VITE_BACKEND_URL": "@backend_url"
-     }
-   }
-   EOF
-   ```
-
-3. **Set Environment Variables**
-   ```bash
-   # Add secrets to Vercel
-   vercel env add WORLD_APP_ID
-   vercel env add BACKEND_URL
-   ```
-
-4. **Deploy**
-   ```bash
-   vercel --prod
-   ```
-
-### Alternative: Manual Deployment
-
-1. **Build Mini App**
-   ```bash
-   cd mini-app
-   npm run build
-   ```
-
-2. **Deploy to Static Host**
-   - Upload `dist/` folder to any static hosting service
-   - Configure environment variables in hosting platform
-   - Set up custom domain and SSL certificate
-
-## 3. Backend API Deployment (Optional Cloud)
-
-For production scale, you may want to deploy the backend separately:
-
-### Railway Deployment
-
-1. **Create Dockerfile**
-   ```dockerfile
-   FROM python:3.11-slim
-   
-   WORKDIR /app
-   COPY server/requirements.txt .
-   RUN pip install -r requirements.txt
-   
-   COPY server/ .
-   
-   EXPOSE 8000
-   
-   CMD ["python", "app.py"]
-   ```
-
-2. **Deploy to Railway**
-   - Connect GitHub repository
-   - Set environment variables
-   - Deploy automatically
-
-## 4. Database Setup (Neon.tech)
-
-1. **Create Neon Project**
-   - Sign up at neon.tech
-   - Create new project
-   - Copy connection string
-
-2. **Initialize Database**
-   ```bash
-   # Run schema migration
-   psql "your_neon_connection_string" -f schema.sql
-   ```
-
-## 5. World ID Configuration
-
-1. **Create World App**
-   - Go to developer.worldcoin.org
-   - Create new app
-   - Configure verification levels
-   - Copy App ID and Client Secret
-
-2. **Test Integration**
-   ```bash
-   # Test World ID verification
-   python test_complete_flow.py
-   ```
-
-## 6. Monitoring and Maintenance
-
-### System Monitoring
-
-1. **Service Status**
-   ```bash
-   # Check service status
-   sudo systemctl status roluatm-backend
-   
-   # View logs
-   sudo journalctl -u roluatm-backend -f
-   ```
-
-2. **Hardware Monitoring**
-   ```bash
-   # Check T-Flex dispenser
-   ls -la /dev/ttyUSB*
-   
-   # Test serial connection
-   python -c "import serial; print(serial.Serial('/dev/ttyUSB0', 9600).readline())"
-   ```
-
-### Updates and Backup
-
-1. **Application Updates**
-   ```bash
-   cd /home/pi/RoluATM
-   git pull origin main
-   
-   # Rebuild kiosk app
-   cd kiosk-app && npm run build && cd ..
-   
-   # Restart services
-   sudo systemctl restart roluatm-backend
-   ```
-
-2. **Database Backup**
-   ```bash
-   # Backup transactions table
-   pg_dump "your_neon_connection_string" -t transactions > backup.sql
-   ```
-
-## 7. Security Considerations
-
-1. **Network Security**
-   - Use HTTPS for all external communications
-   - Configure firewall to only allow necessary ports
-   - Use VPN for remote access
-
-2. **Hardware Security**
-   - Secure physical access to Raspberry Pi
-   - Use hardware cases with locks
-   - Monitor for tampering
-
-3. **Application Security**
-   - Regularly update dependencies
-   - Monitor for security vulnerabilities
-   - Use environment variables for secrets
-
-## 8. Troubleshooting
-
-### Common Issues
-
-1. **T-Flex Dispenser Not Working**
-   ```bash
-   # Check USB connection
-   lsusb
-   ls -la /dev/ttyUSB*
-   
-   # Check permissions
-   sudo usermod -a -G dialout pi
-   ```
-
-2. **Frontend Not Loading**
-   ```bash
-   # Check Nginx status
-   sudo systemctl status nginx
-   
-   # Check Nginx logs
-   sudo tail -f /var/log/nginx/error.log
-   ```
-
-3. **Backend API Errors**
-   ```bash
-   # Check service logs
-   sudo journalctl -u roluatm-backend -n 50
-   
-   # Test database connection
-   python -c "import psycopg2; psycopg2.connect('your_db_url')"
-   ```
-
-### Performance Optimization
-
-1. **Raspberry Pi Performance**
-   - Use SSD instead of SD card for better I/O
-   - Increase GPU memory split if using graphics
-   - Monitor CPU temperature and add cooling
-
-2. **Database Optimization**
-   - Add indexes for frequently queried fields
-   - Set up connection pooling
-   - Monitor query performance
-
-## Contact and Support
-
-- **Documentation**: [README.md](./README.md)
-- **Issues**: GitHub Issues
-- **Testing**: Run `python test_complete_flow.py` to verify deployment 
+### Option 4: Pi Production
+- Backend on Raspberry Pi
+- Frontends on Vercel
+- Best for actual kiosk deployment 
