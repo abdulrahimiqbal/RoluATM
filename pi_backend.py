@@ -14,17 +14,17 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 # Configuration
-MINI_APP_URL = os.getenv("MINI_APP_URL", "http://localhost:3001")
+MINI_APP_URL = os.getenv("MINI_APP_URL", "https://mini-app-azure.vercel.app")
 DATABASE_URL = "postgresql://neondb_owner:npg_BwRjLZD4Qp0V@ep-crimson-meadow-a81cmjla-pooler.eastus2.azure.neon.tech/neondb?sslmode=require"
 TFLEX_PORT = "/dev/ttyUSB0"  # Your T-Flex serial port
 PORT = 8000
 
 # CORS allowed origins
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",                # Local kiosk dev
-    "http://localhost:3001",                # Local mini dev
-    "https://rolu-atm-kiosk.vercel.app",   # Production kiosk
-    "https://rolu-atm-mini.vercel.app",    # Production mini
+    "http://localhost:3000",                    # Local kiosk dev
+    "http://localhost:3001",                    # Local mini dev
+    "https://kiosk-app-xi.vercel.app",         # Production kiosk
+    "https://mini-app-azure.vercel.app",       # Production mini
 ]
 
 # In-memory transactions (you can add database later)
