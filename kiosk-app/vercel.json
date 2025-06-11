@@ -5,11 +5,11 @@
   "installCommand": "npm install",
   "devCommand": "npm run dev",
   "env": {
-    "VITE_API_URL": "https://roluatm-backend.vercel.app"
+    "VITE_API_URL": "http://localhost:8000"
   },
   "build": {
     "env": {
-      "VITE_API_URL": "https://roluatm-backend.vercel.app"
+      "VITE_API_URL": "http://localhost:8000"
     }
   }
 } 

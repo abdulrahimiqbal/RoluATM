@@ -1,59 +1,54 @@
 {
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "framework": "vite",
-  "installCommand": "npm install",
-  "devCommand": "npm run dev",
-  "functions": {
-    "server/app.py": {
-      "runtime": "python3.9"
-    }
-  },
-  "routes": [
+  "version": 2,
+  "projects": [
     {
-      "src": "/api/(.*)",
-      "dest": "/server/app.py"
+      "name": "rolu-atm-kiosk",
+      "source": "kiosk-app",
+      "framework": "vite",
+      "outputDirectory": "dist",
+      "buildCommand": "npm run build",
+      "installCommand": "npm install",
+      "env": {
+        "VITE_API_URL": "http://localhost:8000"
+      }
     },
     {
-      "src": "/health",
-      "dest": "/server/app.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "name": "rolu-atm-mini",
+      "source": "mini-app", 
+      "framework": "vite",
+      "outputDirectory": "dist",
+      "buildCommand": "npm run build",
+      "installCommand": "npm install",
+      "env": {
+        "VITE_API_URL": "http://localhost:8000",
+        "VITE_WORLD_APP_ID": "app_staging_c6e6bc4b19c31866df3d9d02b6a5b4db"
+      }
     }
   ],
-  "env": {
-    "VITE_WORLD_APP_ID": "@world_app_id",
-    "VITE_API_URL": "https://your-app.vercel.app",
-    "WORLD_CLIENT_SECRET": "@world_client_secret",
-    "DATABASE_URL": "@database_url",
-    "DEV_MODE": "false",
-    "MINI_APP_URL": "https://your-mini-app.vercel.app"
-  },
-  "build": {
-    "env": {
-      "VITE_WORLD_APP_ID": "@world_app_id",
-      "VITE_API_URL": "https://your-app.vercel.app"
-    }
-  },
-  "headers": [
+  "builds": [
     {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PUT, DELETE, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
-        }
-      ]
+      "src": "kiosk-app/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "kiosk-app/dist"
+      }
+    },
+    {
+      "src": "mini-app/package.json", 
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "mini-app/dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/kiosk/(.*)",
+      "dest": "/kiosk-app/$1"
+    },
+    {
+      "src": "/mini/(.*)",
+      "dest": "/mini-app/$1"  
     }
   ]
 } 
