@@ -8,9 +8,6 @@
     "dev:kiosk": "cd kiosk-app && npm run dev",
     "dev:mini": "cd mini-app && npm run dev",
     "dev:backend": "python3 pi_backend.py",
-    "build": "npm run build:kiosk && npm run build:mini",
-    "build:kiosk": "cd kiosk-app && npm run build",
-    "build:mini": "cd mini-app && npm run build",
     "install:all": "npm install && cd kiosk-app && npm install && cd ../mini-app && npm install",
     "clean": "rm -rf node_modules kiosk-app/node_modules mini-app/node_modules kiosk-app/dist mini-app/dist"
   },
