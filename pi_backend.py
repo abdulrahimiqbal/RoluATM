@@ -12,6 +12,8 @@ import uuid
 import time
 import logging
 import psycopg2
+import psycopg2.extras
+from decimal import Decimal
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -44,6 +46,15 @@ print("🎰 RoluATM Pi Backend Starting...")
 print(f"✅ Server: http://localhost:{PORT}")
 print(f"✅ Mini App: {MINI_APP_URL}")
 print(f"✅ T-Flex: {'Hardware Mode' if TFLEX_AVAILABLE else 'Mock Mode'}")
+
+class DecimalEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles Decimal objects"""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        elif isinstance(obj, datetime):
+            return obj.isoformat() + 'Z'
+        return super().default(obj)
 
 class TFlexDispenser:
     """T-Flex coin dispenser controller"""
@@ -113,36 +124,47 @@ class DatabaseManager:
     
     def create_transaction(self, fiat_amount):
         """Create a new transaction"""
-        transaction_id = str(uuid.uuid4())
-        quarters = int(fiat_amount * 4)  # $1 = 4 quarters
-        expires_at = datetime.utcnow() + timedelta(minutes=10)
-        mini_app_url = f"{MINI_APP_URL}?transaction_id={transaction_id}"
-        
         try:
+            transaction_id = str(uuid.uuid4())
+            mini_app_url = f"{MINI_APP_URL}?transaction_id={transaction_id}"
+            expires_at = datetime.utcnow() + timedelta(minutes=15)
+            
             with self.get_connection() as conn:
                 cur = conn.cursor()
                 cur.execute("""
                     INSERT INTO transactions (
-                        id, fiat_amount, quarters, status, created_at, expires_at, mini_app_url, progress
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        id, world_id, cryptocurrency, crypto_amount, 
+                        fiat_amount, fiat_currency, exchange_rate, 
+                        status, created_at, expires_at, mini_app_url, progress
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING *
                 """, (
-                    transaction_id, fiat_amount, quarters, 'pending', 
-                    datetime.utcnow(), expires_at, mini_app_url, 0
+                    transaction_id,
+                    '',  # world_id (empty string instead of NULL)
+                    'USD',  # cryptocurrency 
+                    0.0,  # crypto_amount 
+                    fiat_amount,
+                    'USD',
+                    1.0,  # exchange_rate
+                    'pending',
+                    datetime.utcnow(),
+                    expires_at,
+                    mini_app_url,
+                    0  # progress
                 ))
+                
+                row = cur.fetchone()
+                columns = [desc[0] for desc in cur.description]
+                transaction = dict(zip(columns, row))
+                
+                # Calculate quarters for display (4 quarters per dollar)
+                quarters = int(fiat_amount * 4)
+                transaction['quarters'] = quarters
+                
                 conn.commit()
-                
                 logger.info(f"✅ Created transaction {transaction_id} for ${fiat_amount} ({quarters} quarters)")
+                return transaction
                 
-                return {
-                    'id': transaction_id,
-                    'fiat_amount': fiat_amount,
-                    'quarters': quarters,
-                    'status': 'pending',
-                    'created_at': datetime.utcnow().isoformat() + 'Z',
-                    'expires_at': expires_at.isoformat() + 'Z',
-                    'mini_app_url': mini_app_url,
-                    'progress': 0
-                }
         except Exception as e:
             logger.error(f"Database error creating transaction: {e}")
             raise
@@ -160,11 +182,6 @@ class DatabaseManager:
                 
                 columns = [desc[0] for desc in cur.description]
                 transaction = dict(zip(columns, row))
-                
-                # Convert datetime objects to ISO strings
-                for key, value in transaction.items():
-                    if isinstance(value, datetime):
-                        transaction[key] = value.isoformat() + 'Z'
                 
                 return transaction
         except Exception as e:
@@ -292,7 +309,7 @@ class RoluATMHandler(BaseHTTPRequestHandler):
                     print(f"🔒 Mock World ID verification for {transaction_id}")
                 
                 # Dispense quarters
-                quarters_to_dispense = transaction['quarters']
+                quarters_to_dispense = int(transaction['fiat_amount'] * 4)
                 if tflex.dispense_quarters(quarters_to_dispense):
                     # Update transaction as completed
                     db.update_transaction_status(transaction_id, 'completed', nullifier_hash)
@@ -321,7 +338,7 @@ class RoluATMHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
-        response = json.dumps(data, indent=2)
+        response = json.dumps(data, cls=DecimalEncoder, indent=2)
         self.wfile.write(response.encode('utf-8'))
     
     def send_error_response(self, status_code, message):
