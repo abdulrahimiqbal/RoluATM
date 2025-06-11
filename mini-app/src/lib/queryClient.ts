@@ -1,6 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// Configure API base URL - support for local backend testing
+// Configure API base URL - support for local and Vercel backend testing
 const getApiBaseUrl = () => {
   // Check if there's a URL parameter for the backend URL (for testing)
   const urlParams = new URLSearchParams(window.location.search);
@@ -10,6 +10,11 @@ const getApiBaseUrl = () => {
     // Allow connecting to local backend for testing
     if (backendParam === 'local') {
       return 'http://localhost:8000';
+    }
+    // Allow connecting to Vercel backend for testing
+    if (backendParam === 'vercel') {
+      // Use the deployed backend URL - this should match your Vercel deployment
+      return 'https://rolu-atm-backend.vercel.app';
     }
     return backendParam;
   }
