@@ -1,0 +1,39 @@
+[Unit]
+Description=RoluATM Resilient Dispenser Service
+Documentation=https://github.com/abdulrahimiqbal/RoluATM
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=rahiim
+Group=rahiim
+WorkingDirectory=/home/rahiim/RoluATM
+Environment=PATH=/usr/bin:/usr/local/bin:/home/rahiim/RoluATM/venv/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=VERCEL_API_URL=https://rolu-api.vercel.app/api/v2
+EnvironmentFile=-/home/rahiim/RoluATM/.env.local
+ExecStartPre=/bin/sleep 10
+ExecStart=/home/rahiim/RoluATM/venv/bin/python /home/rahiim/RoluATM/pi_dispenser_service.py
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rolu-dispenser
+
+# Simplified security settings for Pi
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=false
+ProtectHome=false
+
+# Resource limits
+LimitNOFILE=1024
+MemoryMax=256M
+
+# Health monitoring
+WatchdogSec=60
+
+[Install]
+WantedBy=multi-user.target 
