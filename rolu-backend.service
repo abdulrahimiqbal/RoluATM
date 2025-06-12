@@ -1,0 +1,19 @@
+[Unit]
+Description=RoluATM Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=rahiim
+WorkingDirectory=/home/rahiim/RoluATM
+Environment=WORLD_CLIENT_SECRET=sk_c89f32b0b0d0e2fda1d8b93c40e3e6f3c01a5b19
+Environment=DATABASE_URL=postgresql://neondb_owner:npg_BwRjLZD4Qp0V@ep-crimson-meadow-a81cmjla-pooler.eastus2.azure.neon.tech/neondb?sslmode=require
+Environment=DEV_MODE=false
+Environment=MINI_APP_URL=https://mini-app-azure.vercel.app
+ExecStart=/home/rahiim/RoluATM/venv/bin/python /home/rahiim/RoluATM/pi_backend.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 
+ 

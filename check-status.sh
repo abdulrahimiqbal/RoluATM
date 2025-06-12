@@ -1,43 +1,61 @@
 #!/bin/bash
 
 # RoluATM System Status Check
-echo "🔍 RoluATM System Status"
-echo "========================"
+echo "🔍 RoluATM System Status Check"
+echo "=============================="
 
-# Function to check service status
-check_service() {
-    local service_name=$1
-    local pid_file=$2
-    local port=$3
-    local url=$4
+# Function to check if a port is in use
+check_port() {
+    local port=$1
+    local service=$2
     
-    if [ -f "$pid_file" ]; then
-        local pid=$(cat "$pid_file")
-        if kill -0 "$pid" 2>/dev/null; then
-            # Check if service is responding
-            if curl -s "$url" > /dev/null 2>&1; then
-                echo "✅ $service_name: Running (PID: $pid, Port: $port)"
-            else
-                echo "⚠️  $service_name: Process running but not responding (PID: $pid)"
-            fi
-        else
-            echo "❌ $service_name: Process not running (stale PID file)"
-        fi
+    if lsof -i:$port >/dev/null 2>&1; then
+        echo "✅ $service (port $port): RUNNING"
+        return 0
     else
-        echo "❌ $service_name: Not running (no PID file)"
+        echo "❌ $service (port $port): NOT RUNNING"
+        return 1
     fi
 }
 
-# Check all services
-check_service "Backend" "backend.pid" "8000" "http://localhost:8000/health"
-check_service "Kiosk App" "kiosk.pid" "3000" "http://localhost:3000"
-check_service "Mini App" "mini.pid" "3001" "http://localhost:3001"
+# Function to check HTTP endpoint
+check_endpoint() {
+    local url=$1
+    local service=$2
+    
+    if curl -s "$url" >/dev/null 2>&1; then
+        echo "✅ $service endpoint: RESPONDING"
+        return 0
+    else
+        echo "❌ $service endpoint: NOT RESPONDING"
+        return 1
+    fi
+}
 
 echo ""
-echo "🌐 Service URLs:"
+echo "📊 Port Status:"
+check_port 8000 "Backend API"
+check_port 3000 "Kiosk App"
+check_port 3001 "Mini App"
+
+echo ""
+echo "🌐 Endpoint Status:"
+check_endpoint "http://localhost:8000/health" "Backend Health"
+check_endpoint "http://localhost:3000" "Kiosk App"
+check_endpoint "http://localhost:3001" "Mini App"
+
+echo ""
+echo "🔗 Access URLs:"
 echo "Backend API:    http://localhost:8000"
 echo "Kiosk App:      http://localhost:3000"
 echo "Mini App:       http://localhost:3001"
+
+echo ""
+echo "📋 Process Information:"
+echo "Backend processes:"
+pgrep -f "python.*app.py" | head -3
+echo "Node processes:"
+pgrep -f "npm run dev" | head -3
 
 echo ""
 echo "📊 Port Usage:"
