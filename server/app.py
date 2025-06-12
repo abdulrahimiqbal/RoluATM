@@ -334,11 +334,11 @@ def get_transaction_status(transaction_id):
         if transaction['expires_at'] < datetime.now(timezone.utc) and transaction['status'] == 'pending':
             db.update_transaction_status(transaction_id, 'expired')
             transaction['status'] = 'expired'
-        
-        return jsonify({
+    
+    return jsonify({
             "status": transaction['status'],
             "progress": transaction.get('progress', 0)
-        })
+    })
         
     except Exception as e:
         logger.error(f"Status fetch error: {e}")
@@ -413,9 +413,9 @@ def process_payment():
             )
             
             logger.info(f"Transaction {transaction_id} completed successfully")
-            
-            return jsonify({
-                "success": True,
+        
+        return jsonify({
+            "success": True,
                 "message": "Payment processed and coins dispensed",
                 "quarters_dispensed": dispense_result['quarters_dispensed']
             })

@@ -257,13 +257,55 @@ class RoluATMHandler(BaseHTTPRequestHandler):
         
         try:
             if path == '/health':
-                self.send_json_response({
-                    'status': 'healthy',
-                    'hardware': {
-                        'tflex': 'hardware' if TFLEX_AVAILABLE else 'mock'
-                    },
-                    'database': 'connected'
-                })
+                # Enhanced health check with comprehensive system status
+                try:
+                    # Test database connection
+                    db_status = "connected"
+                    try:
+                        with db.get_connection() as conn:
+                            cur = conn.cursor()
+                            cur.execute("SELECT 1")
+                            cur.fetchone()
+                    except Exception as e:
+                        logger.error(f"Database health check failed: {e}")
+                        db_status = "error"
+                    
+                    # Check T-Flex hardware status
+                    tflex_status = tflex.get_status()
+                    hardware_status = "hardware" if TFLEX_AVAILABLE else "mock"
+                    if tflex_status.get('status') == 'error':
+                        hardware_status = "error"
+                    
+                    # Determine overall system health
+                    overall_status = "healthy"
+                    if db_status == "error" or hardware_status == "error":
+                        overall_status = "unhealthy"
+                    elif db_status != "connected":
+                        overall_status = "degraded"
+                    
+                    self.send_json_response({
+                        'status': overall_status,
+                        'backend': 'online',
+                        'database': db_status,
+                        'hardware': {
+                            'tflex': hardware_status
+                        },
+                        'network': 'connected',  # Assume connected if we can respond
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    })
+                except Exception as e:
+                    logger.error(f"Health check error: {e}")
+                    self.send_json_response({
+                        'status': 'unhealthy',
+                        'backend': 'online',
+                        'database': 'error',
+                        'hardware': {
+                            'tflex': 'error'
+                        },
+                        'network': 'connected',
+                        'timestamp': datetime.utcnow().isoformat() + 'Z',
+                        'error': str(e)
+                    }, 503)
             
             elif path == '/api/status':
                 # Return hardware status for kiosk UI

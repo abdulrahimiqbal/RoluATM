@@ -7,6 +7,26 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Eruda debugging console for mobile/Pi debugging -->
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+      // Only enable Eruda in development or when ?debug=1 is in URL
+      if (window.location.hostname === 'localhost' || 
+          window.location.hostname === '192.168.1.250' || 
+          window.location.search.includes('debug=1')) {
+        eruda.init();
+      }
+    </script>
+    <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
+    <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
+  </body>
+</html>
+      if (window.location.hostname === 'localhost' || 
+          window.location.hostname === '192.168.1.250' || 
+          window.location.search.includes('debug=1')) {
+        eruda.init();
+      }
+    </script>
     <!-- This is a replit script which adds a banner on the top of the page when opened in development mode outside the replit environment -->
     <script type="text/javascript" src="https://replit.com/public/js/replit-dev-banner.js"></script>
   </body>

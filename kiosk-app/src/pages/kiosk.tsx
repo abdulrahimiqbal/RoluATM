@@ -17,7 +17,14 @@ import {
   Wifi,
   AlertTriangle,
   Headphones,
-  RefreshCw
+  RefreshCw,
+  X,
+  Database,
+  Server,
+  Shield,
+  WifiOff,
+  AlertCircle,
+  CheckCircle
 } from "lucide-react";
 
 interface HardwareStatus {
@@ -26,13 +33,24 @@ interface HardwareStatus {
   security: "active" | "inactive";
 }
 
+interface SystemHealth {
+  status: "healthy" | "degraded" | "unhealthy";
+  backend: "online" | "offline";
+  database: "connected" | "disconnected" | "error";
+  hardware: {
+    tflex: "hardware" | "mock" | "error";
+  };
+  network: "connected" | "disconnected";
+  timestamp: string;
+}
+
 interface Transaction {
   id: string;
   amount: number;
   quarters: number;
   total: number;
   mini_app_url: string;
-  status: "pending" | "paid" | "dispensing" | "complete" | "failed";
+  status: "pending" | "paid" | "dispensing" | "completed" | "failed";
   created_at: string;
 }
 
@@ -59,6 +77,14 @@ export default function KioskPage() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Fetch system health
+  const { data: systemHealth, isError: healthError } = useQuery<SystemHealth>({
+    queryKey: ["/health"],
+    refetchInterval: 3000, // Check every 3 seconds
+    retry: 3,
+    retryDelay: 1000,
+  });
 
   // Fetch hardware status
   const { data: hardwareStatus } = useQuery<HardwareStatus>({
@@ -91,7 +117,7 @@ export default function KioskPage() {
         }
         
         // Handle completion
-        if (transactionStatus.status === "complete") {
+        if (transactionStatus.status === "completed") {
           setDispensingProgress(100);
           toast({
             title: "Transaction Complete!",
@@ -133,6 +159,55 @@ export default function KioskPage() {
     },
   });
 
+  // Check if system is ready for transactions
+  const isSystemReady = () => {
+    if (healthError || !systemHealth) return false;
+    
+    return (
+      systemHealth.status === "healthy" &&
+      systemHealth.backend === "online" &&
+      systemHealth.database === "connected" &&
+      (systemHealth.hardware.tflex === "hardware" || systemHealth.hardware.tflex === "mock")
+    );
+  };
+
+  // Get system status indicator
+  const getSystemStatusIndicator = () => {
+    if (healthError || !systemHealth) {
+      return {
+        color: "bg-red-500",
+        text: "System Offline",
+        icon: AlertCircle,
+        textColor: "text-red-600"
+      };
+    }
+
+    if (systemHealth.status === "healthy" && isSystemReady()) {
+      return {
+        color: "bg-green-500",
+        text: "All Systems Ready",
+        icon: CheckCircle,
+        textColor: "text-green-600"
+      };
+    }
+
+    if (systemHealth.status === "degraded") {
+      return {
+        color: "bg-yellow-500",
+        text: "System Degraded",
+        icon: AlertTriangle,
+        textColor: "text-yellow-600"
+      };
+    }
+
+    return {
+      color: "bg-red-500",
+      text: "System Error",
+      icon: AlertCircle,
+      textColor: "text-red-600"
+    };
+  };
+
   const handleAmountSelect = (amount: number) => {
     setSelectedAmount(amount);
     setCustomAmount("");
@@ -152,6 +227,15 @@ export default function KioskPage() {
   };
 
   const handleCreateTransaction = () => {
+    if (!isSystemReady()) {
+      toast({
+        title: "System Not Ready",
+        description: "Please wait for all systems to come online before creating a transaction",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (selectedAmount <= 0) {
       toast({
         title: "Select Amount",
@@ -212,6 +296,29 @@ export default function KioskPage() {
     }
   };
 
+  // Handle exit/close browser
+  const handleExit = () => {
+    // Try multiple methods to close the browser/app
+    if (window.confirm("Are you sure you want to exit the kiosk?")) {
+      // For kiosk mode browsers
+      if (window.close) {
+        window.close();
+      }
+      // For Electron apps
+      if (window.electronAPI?.closeApp) {
+        window.electronAPI.closeApp();
+      }
+      // For PWA/fullscreen mode
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+      // Fallback - navigate to a blank page
+      window.location.href = "about:blank";
+    }
+  };
+
+  const systemStatusIndicator = getSystemStatusIndicator();
+
   // Show QR code screen when transaction is created
   if (currentTransaction && currentTransaction.status === "pending") {
     return (
@@ -226,14 +333,24 @@ export default function KioskPage() {
               <p className="text-sm text-gray-600">Scan to Complete Payment</p>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-lg font-semibold text-neutral-dark">
-              {currentTime.toLocaleTimeString('en-US', { 
-                hour: 'numeric', 
-                minute: '2-digit', 
-                hour12: true 
-              })}
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <div className="text-lg font-semibold text-neutral-dark">
+                {currentTime.toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: '2-digit', 
+                  hour12: true 
+                })}
+              </div>
             </div>
+            <Button
+              onClick={handleExit}
+              variant="ghost"
+              size="sm"
+              className="w-10 h-10 p-0 text-gray-500 hover:text-red-500 hover:bg-red-50"
+            >
+              <X className="w-6 h-6" />
+            </Button>
           </div>
         </header>
 
@@ -311,6 +428,14 @@ export default function KioskPage() {
               <p className="text-sm text-gray-600">Dispensing Quarters</p>
             </div>
           </div>
+          <Button
+            onClick={handleExit}
+            variant="ghost"
+            size="sm"
+            className="w-10 h-10 p-0 text-gray-500 hover:text-red-500 hover:bg-red-50"
+          >
+            <X className="w-6 h-6" />
+          </Button>
         </header>
 
         <main className="flex-1 flex items-center justify-center p-8">
@@ -349,7 +474,7 @@ export default function KioskPage() {
   }
 
   // Show success screen
-  if (currentTransaction && currentTransaction.status === "complete") {
+  if (currentTransaction && currentTransaction.status === "completed") {
     return (
       <div className="h-screen flex flex-col gradient-primary">
         <header className="bg-white shadow-lg px-8 py-4 flex justify-between items-center">
@@ -362,6 +487,14 @@ export default function KioskPage() {
               <p className="text-sm text-gray-600">Transaction Complete</p>
             </div>
           </div>
+          <Button
+            onClick={handleExit}
+            variant="ghost"
+            size="sm"
+            className="w-10 h-10 p-0 text-gray-500 hover:text-red-500 hover:bg-red-50"
+          >
+            <X className="w-6 h-6" />
+          </Button>
         </header>
 
         <main className="flex-1 flex items-center justify-center p-8">
@@ -375,30 +508,37 @@ export default function KioskPage() {
                   Transaction Complete!
                 </h2>
                 <p className="text-xl text-gray-600">
-                  Please collect your quarters from the dispenser
+                  Your {currentTransaction.quarters} quarters have been dispensed
                 </p>
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-6 mb-8">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Amount:</span>
+              <div className="bg-green-50 rounded-xl p-6 mb-8">
+                <div className="text-lg">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Amount Withdrawn:</span>
                     <span className="font-semibold">${currentTransaction.amount.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Quarters dispensed:</span>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-gray-600">Quarters Dispensed:</span>
                     <span className="font-semibold">{currentTransaction.quarters}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Transaction ID:</span>
-                    <span className="font-mono text-sm">{currentTransaction.id}</span>
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="text-gray-800 font-semibold">Total Paid:</span>
+                    <span className="font-bold text-green-600">${currentTransaction.total.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
 
+              <div className="bg-blue-50 rounded-xl p-4 mb-8">
+                <p className="text-sm text-primary font-medium">
+                  <Info className="w-4 h-4 inline mr-2" />
+                  Thank you for using RoluATM! Please collect all your quarters.
+                </p>
+              </div>
+
               <Button
                 onClick={handleNewTransaction}
-                className="w-full h-12 text-xl font-bold bg-primary hover:bg-primary-dark"
+                className="w-full h-16 text-xl font-bold bg-primary hover:bg-primary-dark"
               >
                 Start New Transaction
               </Button>
@@ -409,56 +549,110 @@ export default function KioskPage() {
     );
   }
 
-  // Default amount selection screen
+  // Main interface
   return (
     <div className="h-screen flex flex-col gradient-primary">
-      {/* Header Bar */}
-      <header className="bg-white shadow-lg px-8 py-4 flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">
-            <Coins className="text-white text-xl" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-dark">RoluATM</h1>
-            <p className="text-sm text-gray-600">Crypto-to-Cash ATM</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-6">
-          {/* Hardware Status Indicators */}
-          <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${hardwareStatus ? getStatusDot(hardwareStatus.coinDispenser) : 'bg-gray-500'}`} />
-            <span className="text-sm font-medium text-neutral-dark">
-              Coins: {hardwareStatus?.coinDispenser === 'ready' ? 'Normal' : 
-                     hardwareStatus?.coinDispenser === 'low' ? 'Low' : 'Fault'}
-            </span>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full status-pulse ${hardwareStatus ? getStatusDot(hardwareStatus.network) : 'bg-gray-500'}`} />
-            <span className="text-sm font-medium text-neutral-dark">
-              {hardwareStatus?.network === 'connected' ? 'Online' : 'Offline'}
-            </span>
-          </div>
-          
-          {/* Time Display */}
-          <div className="text-right">
-            <div className="text-lg font-semibold text-neutral-dark">
-              {currentTime.toLocaleTimeString('en-US', { 
-                hour: 'numeric', 
-                minute: '2-digit', 
-                hour12: true 
-              })}
+      {/* Header */}
+      <header className="bg-white shadow-lg px-8 py-4">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">
+              <Coins className="text-white text-xl" />
             </div>
-            <div className="text-sm text-gray-600">
-              {currentTime.toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric', 
-                year: 'numeric' 
-              })}
+            <div>
+              <h1 className="text-2xl font-bold text-neutral-dark">RoluATM</h1>
+              <p className="text-sm text-gray-600">Crypto to Cash Kiosk</p>
             </div>
           </div>
+
+          {/* System Status Indicator */}
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-3 bg-gray-50 rounded-lg px-4 py-2">
+              <div className={`w-3 h-3 rounded-full ${systemStatusIndicator.color} animate-pulse`} />
+              <div className="flex items-center space-x-2">
+                <systemStatusIndicator.icon className={`w-4 h-4 ${systemStatusIndicator.textColor}`} />
+                <span className={`text-sm font-medium ${systemStatusIndicator.textColor}`}>
+                  {systemStatusIndicator.text}
+                </span>
+              </div>
+            </div>
+
+            {/* Detailed System Status */}
+            {systemHealth && (
+              <div className="flex items-center space-x-4 text-xs">
+                <div className="flex items-center space-x-1">
+                  <Server className={`w-3 h-3 ${systemHealth.backend === 'online' ? 'text-green-500' : 'text-red-500'}`} />
+                  <span className={systemHealth.backend === 'online' ? 'text-green-600' : 'text-red-600'}>
+                    Backend
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Database className={`w-3 h-3 ${systemHealth.database === 'connected' ? 'text-green-500' : 'text-red-500'}`} />
+                  <span className={systemHealth.database === 'connected' ? 'text-green-600' : 'text-red-600'}>
+                    Database
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Coins className={`w-3 h-3 ${systemHealth.hardware.tflex !== 'error' ? 'text-green-500' : 'text-red-500'}`} />
+                  <span className={systemHealth.hardware.tflex !== 'error' ? 'text-green-600' : 'text-red-600'}>
+                    Hardware
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  {hardwareStatus?.network === 'connected' ? (
+                    <Wifi className="w-3 h-3 text-green-500" />
+                  ) : (
+                    <WifiOff className="w-3 h-3 text-red-500" />
+                  )}
+                  <span className={hardwareStatus?.network === 'connected' ? 'text-green-600' : 'text-red-600'}>
+                    Network
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <div className="text-lg font-semibold text-neutral-dark">
+                {currentTime.toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: '2-digit', 
+                  hour12: true 
+                })}
+              </div>
+              <div className="text-sm text-gray-600">
+                {currentTime.toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric', 
+                  year: 'numeric' 
+                })}
+              </div>
+            </div>
+
+            {/* Exit Button */}
+            <Button
+              onClick={handleExit}
+              variant="ghost"
+              size="sm"
+              className="w-10 h-10 p-0 text-gray-500 hover:text-red-500 hover:bg-red-50"
+            >
+              <X className="w-6 h-6" />
+            </Button>
+          </div>
         </div>
+
+        {/* System Status Warning Banner */}
+        {!isSystemReady() && (
+          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-600" />
+              <span className="text-yellow-800 font-medium">
+                System not ready for transactions. Please wait for all components to come online.
+              </span>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Interface */}
@@ -484,11 +678,12 @@ export default function KioskPage() {
                     key={amount}
                     onClick={() => handleAmountSelect(amount)}
                     variant={selectedAmount === amount ? "default" : "outline"}
+                    disabled={!isSystemReady()}
                     className={`h-16 text-2xl font-semibold transition-all duration-200 ${
                       selectedAmount === amount 
                         ? 'bg-primary text-white' 
                         : 'bg-neutral border-2 border-gray-300 text-neutral-dark hover:border-primary hover:bg-blue-50'
-                    }`}
+                    } ${!isSystemReady() ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     ${amount}
                   </Button>
@@ -508,6 +703,7 @@ export default function KioskPage() {
                       placeholder="0.00"
                       value={customAmount}
                       onChange={(e) => setCustomAmount(e.target.value)}
+                      disabled={!isSystemReady()}
                       className="pl-12 h-16 text-2xl font-semibold border-2"
                       min="1"
                       max="500"
@@ -516,6 +712,7 @@ export default function KioskPage() {
                   </div>
                   <Button
                     onClick={handleCustomAmountSelect}
+                    disabled={!isSystemReady()}
                     className="h-16 px-8 text-xl font-semibold bg-primary hover:bg-primary-dark"
                   >
                     Select
@@ -556,13 +753,18 @@ export default function KioskPage() {
           <div className="flex space-x-6">
             <Button
               onClick={handleCreateTransaction}
-              disabled={selectedAmount <= 0 || createTransactionMutation.isPending}
-              className="flex-1 h-16 text-2xl font-bold bg-green-600 hover:bg-green-700 text-white shadow-lg"
+              disabled={selectedAmount <= 0 || createTransactionMutation.isPending || !isSystemReady()}
+              className="flex-1 h-16 text-2xl font-bold bg-green-600 hover:bg-green-700 text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {createTransactionMutation.isPending ? (
                 <>
                   <RefreshCw className="w-6 h-6 mr-3 animate-spin" />
                   Creating...
+                </>
+              ) : !isSystemReady() ? (
+                <>
+                  <AlertTriangle className="w-6 h-6 mr-3" />
+                  System Not Ready
                 </>
               ) : (
                 <>
@@ -668,6 +870,43 @@ export default function KioskPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Additional system info */}
+                {systemHealth && (
+                  <>
+                    <div className="border-t pt-3 mt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Backend</span>
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-2 h-2 rounded-full ${systemHealth.backend === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className={`text-sm font-medium ${systemHealth.backend === 'online' ? 'text-green-500' : 'text-red-500'}`}>
+                            {systemHealth.backend}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Database</span>
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-2 h-2 rounded-full ${systemHealth.database === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className={`text-sm font-medium ${systemHealth.database === 'connected' ? 'text-green-500' : 'text-red-500'}`}>
+                            {systemHealth.database}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Hardware Mode</span>
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-2 h-2 rounded-full ${systemHealth.hardware.tflex !== 'error' ? 'bg-green-500' : 'bg-red-500'}`} />
+                          <span className={`text-sm font-medium ${systemHealth.hardware.tflex !== 'error' ? 'text-green-500' : 'text-red-500'}`}>
+                            {systemHealth.hardware.tflex}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -689,7 +928,7 @@ export default function KioskPage() {
           </div>
           
           <div className="text-white text-sm opacity-75">
-            <span>RoluATM v2.0 | Kiosk Mode</span>
+            RoluATM v2.0 • Powered by World ID
           </div>
         </div>
       </footer>

@@ -54,7 +54,7 @@ pytz==2023.3.post1
 # sentry-sdk==1.39.2
 
 # Hardware Testing Tools
-# RPi.GPIO==0.7.1  # Uncomment for actual Raspberry Pi GPIO control
+# RPi.GPIO==0.7.1  # Uncomment for actual Raspberry Pi GPIO control 
 
 # UUID utilities
 uuid==1.30
