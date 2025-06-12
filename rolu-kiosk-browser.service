@@ -1,0 +1,31 @@
+[Unit]
+Description=RoluATM Kiosk Browser
+Documentation=https://github.com/abdulrahimiqbal/RoluATM
+After=network-online.target rolu-kiosk-server.service
+Wants=network-online.target
+Requires=rolu-kiosk-server.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=rahiim
+Group=rahiim
+WorkingDirectory=/home/rahiim/RoluATM
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/rahiim/.Xauthority
+ExecStartPre=/bin/sleep 10
+ExecStart=/usr/bin/chromium-browser --kiosk --no-sandbox --disable-dev-shm-usage --disable-gpu --start-fullscreen --disable-web-security --allow-running-insecure-content http://localhost:3000
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rolu-kiosk-browser
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=false
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target 

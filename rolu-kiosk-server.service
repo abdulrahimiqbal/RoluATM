@@ -1,0 +1,33 @@
+[Unit]
+Description=RoluATM Kiosk HTTP Server
+Documentation=https://github.com/abdulrahimiqbal/RoluATM
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=rahiim
+Group=rahiim
+WorkingDirectory=/home/rahiim/RoluATM
+Environment=PATH=/usr/bin:/usr/local/bin:/home/rahiim/RoluATM/venv/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/rahiim/RoluATM/kiosk_server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rolu-kiosk-server
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=false
+ProtectHome=false
+
+# Resource limits
+LimitNOFILE=1024
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target 
