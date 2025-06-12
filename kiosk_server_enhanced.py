@@ -12,11 +12,17 @@ import http.server
 import socketserver
 import urllib.parse
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+from datetime import datetime, timedelta
+import socket
 
 # Configuration
 PORT = 3000
 DIST_DIR = "/home/rahiim/RoluATM/kiosk-app/dist"
 VERCEL_API_URL = "https://rolu-api.vercel.app/api/v2"
+
+# In-memory storage for transactions (temporary)
+transactions = {}
 
 class KioskHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     """Enhanced handler for the kiosk app with API support"""
@@ -59,6 +65,14 @@ class KioskHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.handle_status_request()
             elif self.path == '/api/transaction/create':
                 self.handle_create_transaction()
+            elif self.path.startswith('/api/transaction/') and self.path.endswith('/status'):
+                # Extract transaction ID from path
+                path_parts = self.path.split('/')
+                if len(path_parts) >= 4:
+                    transaction_id = path_parts[3]
+                    self.handle_transaction_status(transaction_id)
+                else:
+                    self.send_error(400, "Invalid transaction ID")
             else:
                 self.send_error(404, f"API endpoint not found: {self.path}")
         except Exception as e:
@@ -128,6 +142,34 @@ class KioskHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             print(f"Error creating transaction: {e}")
             self.send_error(500, "Transaction creation failed")
     
+    def handle_transaction_status(self, transaction_id):
+        """Handle transaction status requests"""
+        if transaction_id in transactions:
+            transaction = transactions[transaction_id]
+            
+            # Simulate transaction progression
+            now = datetime.now()
+            created_time = transaction.get('created_at', now)
+            elapsed = (now - created_time).total_seconds()
+            
+            if elapsed < 30:  # First 30 seconds - pending
+                status = "pending"
+            elif elapsed < 60:  # Next 30 seconds - processing
+                status = "processing"
+            elif elapsed < 90:  # Next 30 seconds - verified
+                status = "verified"
+            else:  # After 90 seconds - completed
+                status = "completed"
+            
+            response = {
+                **transaction,
+                "status": status,
+                "updated_at": now.isoformat()
+            }
+            self.send_api_response(response)
+        else:
+            self.send_error(404, f"Transaction {transaction_id} not found")
+    
     def get_kiosk_id(self):
         """Get the kiosk ID from file"""
         try:
@@ -145,6 +187,27 @@ class KioskHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         # Enhanced logging
         timestamp = self.log_date_time_string()
         print(f"[{timestamp}] [{self.address_string()}] {format % args}")
+
+    def send_api_response(self, data, status=200):
+        """Send JSON API response"""
+        self.send_response(status)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+        
+        response = json.dumps(data)
+        self.wfile.write(response.encode('utf-8'))
+
+def check_port_available(port):
+    """Check if port is available"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(('', port))
+            return True
+        except OSError:
+            return False
 
 def main():
     """Start the enhanced kiosk HTTP server"""
@@ -164,8 +227,14 @@ def main():
     print(f"🚀 Starting Enhanced RoluATM Kiosk Server...")
     print(f"📁 Serving directory: {DIST_DIR}")
     print(f"🌐 Server URL: http://localhost:{PORT}")
-    print(f"🔧 API endpoints: /api/status, /api/transaction/create")
+    print(f"🔧 API endpoints: /api/status, /api/transaction/create, /api/transaction/{{id}}/status")
     print(f"🔄 Press Ctrl+C to stop")
+    
+    # Check if port is available
+    if not check_port_available(PORT):
+        print(f"❌ Error: Port {PORT} is already in use")
+        print("Please stop any existing server or use a different port")
+        return 1
     
     try:
         with socketserver.TCPServer(("", PORT), KioskHTTPRequestHandler) as httpd:
@@ -173,16 +242,10 @@ def main():
             httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n🛑 Server stopped by user")
-    except OSError as e:
-        if e.errno == 98:  # Address already in use
-            print(f"❌ Error: Port {PORT} is already in use")
-            print("Please stop any existing server or use a different port")
-        else:
-            print(f"❌ Error starting server: {e}")
-        sys.exit(1)
+        return 0
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-        sys.exit(1)
+        print(f"❌ Server error: {e}")
+        return 1
 
 if __name__ == "__main__":
-    main() 
+    exit(main()) 
